@@ -13,7 +13,7 @@ export default function Home() {
     <main className="flex h-screen bg-neutral-950 text-neutral-100 overflow-hidden font-sans">
       {/* Mobile Sidebar Toggle */}
       <button
-        className="lg:hidden absolute top-4 left-4 z-50 p-2 bg-neutral-800 rounded-md"
+        className="lg:hidden absolute bottom-24 right-4 z-50 p-2 bg-neutral-800 rounded-md"
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
       >
         {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
