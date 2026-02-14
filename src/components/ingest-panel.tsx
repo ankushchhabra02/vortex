@@ -25,7 +25,7 @@ export function IngestPanel() {
 
             if (!res.ok) throw new Error("Failed to ingest URL");
 
-            const data = await res.json();
+            await res.json();
             setItems((prev) => [...prev, { type: "url", name: url, id: Date.now().toString() }]);
             setUrl("");
         } catch (error) {
@@ -129,6 +129,21 @@ export function IngestPanel() {
                         <p className="text-xs text-neutral-500">No knowledge added yet.</p>
                     </div>
                 )}
+            </div>
+
+            {/* Profile Footer */}
+            <div className="p-4 border-t border-neutral-800 bg-neutral-900/50">
+                <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-neutral-800/50 transition-colors">
+                    <img
+                        src="https://avatars.githubusercontent.com/u/245355885?v=4"
+                        alt="Ankush"
+                        className="w-16 h-16 rounded-full border border-neutral-700 p-0.5"
+                    />
+                    <div className="flex flex-col">
+                        <span className="text-lg font-medium text-white">Ankush Chhabra</span>
+                        <span className="text-sm text-neutral-500">xanny.me</span>
+                    </div>
+                </div>
             </div>
         </div>
     );
