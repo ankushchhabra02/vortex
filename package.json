@@ -8,10 +8,25 @@
     "start": "next start",
     "lint": "eslint"
   },
+  "overrides": {
+    "pdf-parse": "$pdf-parse"
+  },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "@langchain/community": "^1.1.15",
+    "@langchain/core": "^1.1.24",
+    "@langchain/textsplitters": "^1.0.1",
+    "@xenova/transformers": "^2.17.2",
+    "ai": "^6.0.86",
+    "cheerio": "^1.2.0",
+    "clsx": "^2.1.1",
+    "langchain": "^1.2.24",
+    "lucide-react": "^0.564.0",
     "next": "16.1.6",
+    "pdf-parse": "^1.1.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

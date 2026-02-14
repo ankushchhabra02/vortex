@@ -17,17 +17,44 @@ export function ChatInterface() {
 
         const userMsg = input;
         setInput("");
-        setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
+
+        // Optimistic update
+        const newMessages = [...messages, { role: "user" as const, content: userMsg }];
+        setMessages(newMessages);
         setIsLoading(true);
 
         try {
-            // TODO: Connect to API
-            setTimeout(() => {
-                setMessages((prev) => [...prev, { role: "assistant", content: "I'm not connected to the brain yet!" }]);
-                setIsLoading(false);
-            }, 1000);
+            const res = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ messages: newMessages }),
+            });
+
+            if (!res.ok) throw new Error(res.statusText);
+
+            // Create placeholder for assistant response
+            setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+            const reader = res.body?.getReader();
+            const decoder = new TextDecoder();
+
+            if (!reader) return;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                setMessages((prev) => {
+                    const last = prev[prev.length - 1];
+                    const updated = { ...last, content: last.content + chunk };
+                    return [...prev.slice(0, -1), updated];
+                });
+            }
         } catch (error) {
             console.error(error);
+            setMessages((prev) => [...prev, { role: "assistant", content: "Error: Failed to get response." }]);
+        } finally {
             setIsLoading(false);
         }
     };

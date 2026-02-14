@@ -1,6 +1,6 @@
 
-import { MemoryVectorStore } from "langchain/vectorstores/memory";
-import { HuggingFaceTransformersEmbeddings } from "@langchain/community/embeddings/hf_transformers";
+import { MemoryVectorStore } from "@/lib/simple-memory-store";
+import { HuggingFaceTransformersEmbeddings } from "@langchain/community/embeddings/huggingface_transformers";
 import { Document } from "@langchain/core/documents";
 
 class RAGService {
@@ -22,7 +22,7 @@ class RAGService {
 
         // Use a small, efficient model for local embeddings
         this.embeddings = new HuggingFaceTransformersEmbeddings({
-            modelName: "Xenova/all-MiniLM-L6-v2",
+            model: "Xenova/all-MiniLM-L6-v2",
         });
 
         this.vectorStore = new MemoryVectorStore(this.embeddings);

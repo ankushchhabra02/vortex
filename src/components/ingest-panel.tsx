@@ -14,12 +14,26 @@ export function IngestPanel() {
         if (!url || isIngesting) return;
 
         setIsIngesting(true);
-        // Simulate ingestion
-        setTimeout(() => {
+        try {
+            const formData = new FormData();
+            formData.append("url", url);
+
+            const res = await fetch("/api/ingest", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!res.ok) throw new Error("Failed to ingest URL");
+
+            const data = await res.json();
             setItems((prev) => [...prev, { type: "url", name: url, id: Date.now().toString() }]);
             setUrl("");
+        } catch (error) {
+            console.error(error);
+            alert("Failed to ingest URL");
+        } finally {
             setIsIngesting(false);
-        }, 1500);
+        }
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -27,13 +41,25 @@ export function IngestPanel() {
         if (!file) return;
 
         setIsIngesting(true);
-        // Simulate upload
-        setTimeout(() => {
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const res = await fetch("/api/ingest", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!res.ok) throw new Error("Failed to upload file");
+
             setItems((prev) => [...prev, { type: "file", name: file.name, id: Date.now().toString() }]);
+            e.target.value = ""; // Reset input
+        } catch (error) {
+            console.error(error);
+            alert("Failed to upload file");
+        } finally {
             setIsIngesting(false);
-            // Reset input
-            e.target.value = "";
-        }, 1500);
+        }
     };
 
     return (
