@@ -1,8 +1,8 @@
-"use client";
-
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export function ChatInterface() {
     const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([
@@ -10,6 +10,17 @@ export function ChatInterface() {
     ]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll to bottom
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTo({
+                top: scrollRef.current.scrollHeight,
+                behavior: "smooth",
+            });
+        }
+    }, [messages, isLoading]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -40,9 +51,15 @@ export function ChatInterface() {
 
             if (!reader) return;
 
+            let isFirstChunk = true;
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
+
+                if (isFirstChunk) {
+                    setIsLoading(false);
+                    isFirstChunk = false;
+                }
 
                 const chunk = decoder.decode(value, { stream: true });
                 setMessages((prev) => {
@@ -61,7 +78,7 @@ export function ChatInterface() {
 
     return (
         <div className="flex flex-col h-full bg-neutral-900 text-neutral-100">
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
                 {messages.map((m, i) => (
                     <div
                         key={i}
@@ -82,17 +99,22 @@ export function ChatInterface() {
                                 {m.role === "user" ? <User size={16} /> : <Bot size={16} />}
                                 <span className="text-xs opacity-50 capitalize">{m.role}</span>
                             </div>
-                            <p className="whitespace-pre-wrap">{m.content}</p>
+                            <div className="prose prose-invert prose-sm max-w-none">
+                                {m.role === "assistant" && m.content === "" && isLoading ? (
+                                    <div className="flex items-center py-1">
+                                        <span className="text-sm font-medium bg-gradient-to-r from-neutral-500 via-neutral-200 to-neutral-500 bg-[length:200%_auto] bg-clip-text text-transparent animate-shimmer">
+                                            Thinking...
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {m.content}
+                                    </ReactMarkdown>
+                                )}
+                            </div>
                         </div>
                     </div>
                 ))}
-                {isLoading && (
-                    <div className="flex justify-start w-full animate-pulse">
-                        <div className="bg-neutral-800 rounded-lg p-3 max-w-[80%]">
-                            <span className="text-sm text-neutral-400">Thinking...</span>
-                        </div>
-                    </div>
-                )}
             </div>
 
             <form onSubmit={handleSubmit} className="p-4 border-t border-neutral-800 bg-neutral-900">
