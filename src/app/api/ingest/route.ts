@@ -3,7 +3,6 @@ import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { Document } from "@langchain/core/documents";
 import { ragService } from "@/lib/rag-service-supabase";
-import { supabase } from "@/lib/supabase/client";
 
 // Security: Maximum file size (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -45,43 +44,11 @@ function isValidUrl(url: string): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    // Get authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: "Unauthorized - Please log in" },
-        { status: 401 }
-      );
-    }
-
     const formData = await req.formData();
     const url = formData.get("url") as string;
     const file = formData.get("file") as File;
-    const knowledgeBaseId = formData.get("knowledgeBaseId") as string;
-
-    // Validate knowledge base ID
-    if (!knowledgeBaseId) {
-      return NextResponse.json(
-        { error: "Knowledge base ID is required" },
-        { status: 400 }
-      );
-    }
-
-    // Verify user owns the knowledge base
-    const { data: kb, error: kbError } = await supabase
-      .from('knowledge_bases')
-      .select('id')
-      .eq('id', knowledgeBaseId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (kbError || !kb) {
-      return NextResponse.json(
-        { error: "Knowledge base not found or unauthorized" },
-        { status: 403 }
-      );
-    }
+    const knowledgeBaseId = formData.get("knowledgeBaseId") as string || 'default';
+    const userId = req.headers.get('x-user-id') || 'anonymous';
 
     let docs: Document[] = [];
     let metadata = {
@@ -181,7 +148,7 @@ export async function POST(req: NextRequest) {
 
     // Add documents to RAG system with Supabase
     const documentId = await ragService.addDocuments(
-      user.id,
+      userId,
       knowledgeBaseId,
       docs,
       metadata

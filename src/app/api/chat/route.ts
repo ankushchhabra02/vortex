@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ragService } from "@/lib/rag-service-supabase";
-import { supabase } from "@/lib/supabase/client";
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 
@@ -10,18 +9,8 @@ const MAX_MESSAGES_HISTORY = 20;
 
 export async function POST(req: NextRequest) {
   try {
-    // Get authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: "Unauthorized - Please log in" },
-        { status: 401 }
-      );
-    }
-
     const body = await req.json();
-    const { messages, knowledgeBaseId, conversationId } = body;
+    const { messages, knowledgeBaseId } = body;
 
     // Security: Validate input
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -58,22 +47,12 @@ export async function POST(req: NextRequest) {
     // 1. Retrieve context from RAG (if knowledge base provided)
     let context = "";
     if (knowledgeBaseId) {
-      // Verify user owns the knowledge base
-      const { data: kb, error: kbError } = await supabase
-        .from('knowledge_bases')
-        .select('id')
-        .eq('id', knowledgeBaseId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (kbError || !kb) {
-        return NextResponse.json(
-          { error: "Knowledge base not found or unauthorized" },
-          { status: 403 }
-        );
+      try {
+        context = await ragService.getContext(sanitizedQuery, knowledgeBaseId, 5);
+      } catch (error) {
+        console.error("Error retrieving context:", error);
+        // Continue without context if retrieval fails
       }
-
-      context = await ragService.getContext(sanitizedQuery, knowledgeBaseId, 5);
     }
 
     // 2. Prepare messages for LLM
@@ -114,60 +93,19 @@ Answer based on the context above. Be concise and helpful.`
 
     const response = await chat.stream(chatMessages);
 
-    // 4. Save conversation (if conversationId provided)
-    if (conversationId) {
-      // Verify user owns the conversation
-      const { data: conv, error: convError } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('id', conversationId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (!convError && conv) {
-        // Save user message
-        await supabase.from('messages').insert({
-          conversation_id: conversationId,
-          role: 'user',
-          content: sanitizedQuery,
-        });
-      }
-    }
-
-    // 5. Return stream with proper encoding
+    // 4. Return stream with proper encoding
     const encoder = new TextEncoder();
-    let fullResponse = "";
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
           for await (const chunk of response) {
             const content = chunk.content;
-            if (content) {
-              fullResponse += content;
+            if (content && typeof content === 'string') {
               // Fix: Properly encode the stream
               controller.enqueue(encoder.encode(content));
             }
           }
-
-          // Save assistant response to database
-          if (conversationId && fullResponse) {
-            const { data: conv } = await supabase
-              .from('conversations')
-              .select('id')
-              .eq('id', conversationId)
-              .eq('user_id', user.id)
-              .single();
-
-            if (conv) {
-              await supabase.from('messages').insert({
-                conversation_id: conversationId,
-                role: 'assistant',
-                content: fullResponse,
-              });
-            }
-          }
-
           controller.close();
         } catch (error) {
           console.error("Streaming error:", error);
