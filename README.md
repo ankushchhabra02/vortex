@@ -9,7 +9,8 @@
 - 📄 **Document Ingestion** - Upload PDFs and ingest web URLs
 - 🔍 **Vector Search** - Semantic search using free Transformers.js embeddings
 - 💬 **Streaming Chat** - Real-time responses using OpenRouter's free models
-- 💾 **Conversation History** - Save and retrieve past conversations
+- 💾 **Conversation History** - Persistent chat history per knowledge base with tabbed sidebar
+- 🗂️ **Tabbed Sidebar** - Switch between Chats and Documents in a single sidebar
 - 🔒 **Security First** - Input validation, SSRF protection, RLS policies
 - 🎨 **Modern UI** - Clean, responsive interface with dark mode support
 
@@ -116,7 +117,7 @@ Open [http://localhost:3000](http://localhost:3000) 🎉
 
 ### 1. Create a Knowledge Base
 
-After logging in, you'll automatically get a default knowledge base. You can create more from the sidebar.
+After logging in, create a knowledge base from the sidebar. You can create multiple knowledge bases to organize different topics or projects.
 
 ### 2. Add Documents
 
@@ -138,9 +139,11 @@ After logging in, you'll automatically get a default knowledge base. You can cre
 
 ### 4. View Conversation History
 
-- All conversations are automatically saved
-- Access past chats from the sidebar
-- Continue previous conversations
+- All conversations are automatically saved to the database
+- Switch to the **Chats** tab in the sidebar to see past conversations
+- Click any conversation to load its full message history
+- Click **New Chat** to start a fresh conversation
+- Each knowledge base has its own separate chat history
 
 ## 🏗️ Architecture
 
@@ -156,6 +159,9 @@ After logging in, you'll automatically get a default knowledge base. You can cre
 │      API Routes (Next.js)           │
 │  - /api/chat                        │
 │  - /api/ingest                      │
+│  - /api/conversations               │
+│  - /api/knowledge-bases             │
+│  - /api/documents                   │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
@@ -215,15 +221,16 @@ All tables have Row Level Security (RLS) for multi-user isolation.
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **Next.js 15** - React framework
+- **Next.js 16** - React framework
 - **React 19** - UI library
 - **TypeScript** - Type safety
-- **Tailwind CSS** - Styling
+- **Tailwind CSS v4** - Styling
 - **Lucide Icons** - Icons
 
 ### Backend
 - **Next.js API Routes** - Server endpoints
 - **Supabase** - Database + Auth
+- **@supabase/ssr** - Cookie-based auth for Next.js
 - **pgvector** - Vector similarity search
 - **LangChain** - Document processing
 
@@ -237,23 +244,34 @@ All tables have Row Level Security (RLS) for multi-user isolation.
 vortex/
 ├── src/
 │   ├── app/
-│   │   ├── api/           # API routes
-│   │   │   ├── chat/      # Chat endpoint
-│   │   │   └── ingest/    # Document ingestion
-│   │   ├── auth/          # Auth pages
-│   │   │   ├── login/
-│   │   │   └── signup/
-│   │   ├── layout.tsx     # Root layout
-│   │   └── page.tsx       # Home page
-│   ├── components/        # React components
-│   │   ├── chat-interface.tsx
-│   │   └── ingest-panel.tsx
-│   └── lib/               # Utilities
-│       ├── supabase/      # Supabase clients
-│       ├── embeddings.ts  # FREE embeddings
+│   │   ├── api/
+│   │   │   ├── chat/              # Streaming chat with message persistence
+│   │   │   ├── ingest/            # Document ingestion (PDF, URL)
+│   │   │   ├── conversations/     # CRUD for conversations
+│   │   │   ├── knowledge-bases/   # CRUD for knowledge bases
+│   │   │   └── documents/         # Document deletion
+│   │   ├── auth/callback/         # Supabase auth callback
+│   │   ├── login/                 # Login page
+│   │   ├── signup/                # Signup page
+│   │   ├── layout.tsx             # Root layout
+│   │   └── page.tsx               # Home page
+│   ├── components/
+│   │   ├── chat-interface.tsx     # Chat UI with conversation loading
+│   │   ├── ingest-panel.tsx       # Tabbed sidebar (Chats/Documents)
+│   │   ├── conversation-list.tsx  # Conversation list & management
+│   │   ├── knowledge-base-selector.tsx
+│   │   └── toast.tsx              # Toast notification system
+│   └── lib/
+│       ├── supabase/
+│       │   ├── client.ts          # Browser client (lazy proxy)
+│       │   ├── server.ts          # Server client (admin + authenticated)
+│       │   ├── auth.ts            # Auth helper for API routes
+│       │   └── database.types.ts  # TypeScript types
+│       ├── embeddings.ts          # FREE local embeddings
 │       └── rag-service-supabase.ts
+├── src/middleware.ts               # Auth middleware
 ├── supabase/
-│   └── migrations/        # Database schema
+│   └── migrations/                # Database schema
 ├── .env.example
 └── README.md
 ```

@@ -1,150 +1,387 @@
 "use client";
 
-import { useState } from "react";
-import { Link as LinkIcon, FileText, Upload, Plus, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import {
+  Link as LinkIcon,
+  FileText,
+  Upload,
+  Plus,
+  X,
+  LogOut,
+  Loader2,
+  MessageSquare,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { KnowledgeBaseSelector } from "./knowledge-base-selector";
+import { ConversationList } from "./conversation-list";
+import { useToast } from "./toast";
 
-export function IngestPanel() {
-    const [url, setUrl] = useState("");
-    const [isIngesting, setIsIngesting] = useState(false);
-    const [items, setItems] = useState<{ type: "url" | "file"; name: string; id: string }[]>([]);
+interface DocumentItem {
+  type: "url" | "file";
+  name: string;
+  id: string;
+}
 
-    const handleUrlSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!url || isIngesting) return;
+interface IngestPanelProps {
+  knowledgeBaseId: string | null;
+  onKbChange: (kbId: string) => void;
+  user: { id: string; email?: string } | null;
+  onClose?: () => void;
+  activeConversationId: string | null;
+  onConversationChange: (conversationId: string | null) => void;
+  conversationRefreshKey?: number;
+}
 
-        setIsIngesting(true);
-        try {
-            const formData = new FormData();
-            formData.append("url", url);
+type SidebarTab = "chats" | "documents";
 
-            const res = await fetch("/api/ingest", {
-                method: "POST",
-                body: formData,
-            });
+export function IngestPanel({
+  knowledgeBaseId,
+  onKbChange,
+  user,
+  onClose,
+  activeConversationId,
+  onConversationChange,
+  conversationRefreshKey,
+}: IngestPanelProps) {
+  const [url, setUrl] = useState("");
+  const [isIngesting, setIsIngesting] = useState(false);
+  const [items, setItems] = useState<DocumentItem[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [activeTab, setActiveTab] = useState<SidebarTab>("chats");
+  const router = useRouter();
+  const { toast } = useToast();
 
-            if (!res.ok) throw new Error("Failed to ingest URL");
+  // Fetch documents when KB changes
+  useEffect(() => {
+    if (!knowledgeBaseId) {
+      setItems([]);
+      return;
+    }
+    fetchDocuments(knowledgeBaseId);
+  }, [knowledgeBaseId]);
 
-            await res.json();
-            setItems((prev) => [...prev, { type: "url", name: url, id: Date.now().toString() }]);
-            setUrl("");
-        } catch (error) {
-            console.error(error);
-            alert("Failed to ingest URL");
-        } finally {
-            setIsIngesting(false);
-        }
-    };
+  const fetchDocuments = async (kbId: string) => {
+    setLoadingDocs(true);
+    try {
+      const res = await fetch(`/api/knowledge-bases/${kbId}/documents`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setItems(
+        (data.documents || []).map((doc: any) => ({
+          type: doc.source_url ? "url" : "file",
+          name: doc.title || doc.file_path || "Untitled",
+          id: doc.id,
+        }))
+      );
+    } catch (err) {
+      console.error("Failed to fetch documents:", err);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+  const handleUrlSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!url || isIngesting || !knowledgeBaseId) return;
 
-        setIsIngesting(true);
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
+    setIsIngesting(true);
+    try {
+      const formData = new FormData();
+      formData.append("url", url);
+      formData.append("knowledgeBaseId", knowledgeBaseId);
 
-            const res = await fetch("/api/ingest", {
-                method: "POST",
-                body: formData,
-            });
+      const res = await fetch("/api/ingest", {
+        method: "POST",
+        body: formData,
+      });
 
-            if (!res.ok) throw new Error("Failed to upload file");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to ingest URL");
+      }
 
-            setItems((prev) => [...prev, { type: "file", name: file.name, id: Date.now().toString() }]);
-            e.target.value = ""; // Reset input
-        } catch (error) {
-            console.error(error);
-            alert("Failed to upload file");
-        } finally {
-            setIsIngesting(false);
-        }
-    };
+      const data = await res.json();
+      setItems((prev) => [
+        ...prev,
+        { type: "url", name: url, id: data.documentId },
+      ]);
+      setUrl("");
+      toast("URL ingested successfully", "success");
+    } catch (error: any) {
+      console.error(error);
+      toast(error.message || "Failed to ingest URL", "error");
+    } finally {
+      setIsIngesting(false);
+    }
+  };
 
-    return (
-        <div className="w-80 border-r border-neutral-800 bg-neutral-900 flex flex-col h-full">
-            <div className="p-4 border-b border-neutral-800">
-                <h2 className="text-lg font-semibold text-white mb-2">Knowledge Base</h2>
-                <p className="text-xs text-neutral-400">Add content for Vortex to learn.</p>
-            </div>
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !knowledgeBaseId) return;
 
-            <div className="p-4 border-b border-neutral-800 space-y-4">
-                {/* URL Input */}
-                <form onSubmit={handleUrlSubmit} className="space-y-2">
-                    <label className="text-xs font-medium text-neutral-300 flex items-center gap-2">
-                        <LinkIcon size={14} /> Add Website
+    setIsIngesting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("knowledgeBaseId", knowledgeBaseId);
+
+      const res = await fetch("/api/ingest", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to upload file");
+      }
+
+      const data = await res.json();
+      setItems((prev) => [
+        ...prev,
+        { type: "file", name: file.name, id: data.documentId },
+      ]);
+      e.target.value = "";
+      toast("File uploaded successfully", "success");
+    } catch (error: any) {
+      console.error(error);
+      toast(error.message || "Failed to upload file", "error");
+    } finally {
+      setIsIngesting(false);
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: string) => {
+    try {
+      const res = await fetch(`/api/documents/${documentId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete");
+      setItems((prev) => prev.filter((i) => i.id !== documentId));
+      toast("Document deleted", "info");
+    } catch (error) {
+      console.error("Failed to delete document:", error);
+      toast("Failed to delete document", "error");
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
+
+  return (
+    <div className="w-full h-full bg-zinc-900 flex flex-col">
+      {/* Header */}
+      <div className="p-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
+        <div>
+          <h2 className="text-lg font-semibold text-zinc-100">
+            Knowledge Base
+          </h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Add content for Vortex to learn.
+          </p>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="lg:hidden p-1.5 text-zinc-400 hover:text-zinc-100 rounded-lg hover:bg-zinc-800 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* KB Selector */}
+      <div className="p-4 border-b border-zinc-800 shrink-0">
+        <KnowledgeBaseSelector
+          activeKbId={knowledgeBaseId}
+          onSelect={onKbChange}
+        />
+      </div>
+
+      {/* Content - only show if KB selected */}
+      {knowledgeBaseId ? (
+        <>
+          {/* Tabs */}
+          <div className="flex border-b border-zinc-800 shrink-0">
+            <button
+              onClick={() => setActiveTab("chats")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors border-b-2",
+                activeTab === "chats"
+                  ? "border-blue-500 text-zinc-100"
+                  : "border-transparent text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              <MessageSquare size={14} />
+              Chats
+            </button>
+            <button
+              onClick={() => setActiveTab("documents")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors border-b-2",
+                activeTab === "documents"
+                  ? "border-blue-500 text-zinc-100"
+                  : "border-transparent text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              <FileText size={14} />
+              Documents
+            </button>
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {activeTab === "chats" ? (
+              <ConversationList
+                knowledgeBaseId={knowledgeBaseId}
+                activeConversationId={activeConversationId}
+                onSelect={onConversationChange}
+                refreshKey={conversationRefreshKey}
+              />
+            ) : (
+              <>
+                {/* Ingest controls */}
+                <div className="p-4 border-b border-zinc-800 space-y-4 shrink-0">
+                  {/* URL Input */}
+                  <form onSubmit={handleUrlSubmit} className="space-y-2">
+                    <label className="text-xs font-medium text-zinc-300 flex items-center gap-2">
+                      <LinkIcon size={14} /> Add Website
                     </label>
                     <div className="flex gap-2">
-                        <input
-                            className="flex-1 bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none"
-                            placeholder="https://..."
-                            value={url}
-                            onChange={(e) => setUrl(e.target.value)}
-                            disabled={isIngesting}
-                        />
-                        <button
-                            disabled={isIngesting || !url}
-                            type="submit"
-                            className="bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded p-1.5 transition-colors disabled:opacity-50"
-                        >
-                            <Plus size={16} className="text-blue-400" />
-                        </button>
+                      <input
+                        className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none placeholder-zinc-500 transition-colors"
+                        placeholder="https://..."
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        disabled={isIngesting}
+                      />
+                      <button
+                        disabled={isIngesting || !url}
+                        type="submit"
+                        className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg p-2 transition-colors disabled:opacity-50"
+                      >
+                        <Plus size={16} className="text-blue-400" />
+                      </button>
                     </div>
-                </form>
+                  </form>
 
-                {/* File Upload */}
-                <div className="space-y-2">
-                    <label className="text-xs font-medium text-neutral-300 flex items-center gap-2">
-                        <FileText size={14} /> Add Document
+                  {/* File Upload */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-zinc-300 flex items-center gap-2">
+                      <FileText size={14} /> Add Document
                     </label>
-                    <label className="flex items-center justify-center w-full p-2 border border-dashed border-neutral-700 rounded bg-neutral-800/50 hover:bg-neutral-800/80 cursor-pointer transition-colors group">
-                        <input type="file" className="hidden" accept=".pdf,.txt,.md" onChange={handleFileUpload} disabled={isIngesting} />
-                        <div className="flex items-center gap-2 text-neutral-400 group-hover:text-blue-400 transition-colors">
-                            <Upload size={14} />
-                            <span className="text-xs">Upload PDF or Text</span>
-                        </div>
+                    <label className="flex items-center justify-center w-full p-3 border border-dashed border-zinc-700 rounded-lg bg-zinc-800/50 hover:bg-zinc-800/80 cursor-pointer transition-colors group">
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".pdf,.txt,.md"
+                        onChange={handleFileUpload}
+                        disabled={isIngesting}
+                      />
+                      <div className="flex items-center gap-2 text-zinc-400 group-hover:text-blue-400 transition-colors">
+                        <Upload size={14} />
+                        <span className="text-xs">Upload PDF or Text</span>
+                      </div>
                     </label>
+                  </div>
+
+                  {/* Ingesting indicator */}
+                  {isIngesting && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-950/30 border border-blue-800/30 rounded-lg">
+                      <Loader2
+                        size={14}
+                        className="text-blue-400 animate-spin"
+                      />
+                      <span className="text-xs text-blue-300">
+                        Processing document...
+                      </span>
+                    </div>
+                  )}
                 </div>
-            </div>
 
-            {/* List */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                {items.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-2 rounded hover:bg-neutral-800 group">
-                        <div className="flex items-center gap-2 overflow-hidden">
-                            {item.type === "url" ? <LinkIcon size={14} className="text-blue-400 flex-shrink-0" /> : <FileText size={14} className="text-orange-400 flex-shrink-0" />}
-                            <span className="text-xs text-neutral-300 truncate">{item.name}</span>
-                        </div>
-                        <button
-                            onClick={() => setItems(items.filter(i => i.id !== item.id))}
-                            className="text-neutral-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                            <X size={14} />
-                        </button>
+                {/* Documents List */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                  {loadingDocs ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2
+                        size={20}
+                        className="text-zinc-500 animate-spin"
+                      />
                     </div>
-                ))}
-                {items.length === 0 && (
+                  ) : items.length === 0 ? (
                     <div className="p-4 text-center">
-                        <p className="text-xs text-neutral-500">No knowledge added yet.</p>
+                      <p className="text-xs text-zinc-500">
+                        No documents added yet.
+                      </p>
                     </div>
-                )}
-            </div>
-
-            {/* Profile Footer */}
-            <div className="p-4 border-t border-neutral-800 bg-neutral-900/50">
-                <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-neutral-800/50 transition-colors">
-                    <img
-                        src="https://avatars.githubusercontent.com/u/245355885?v=4"
-                        alt="Ankush"
-                        className="w-16 h-16 rounded-full border border-neutral-700 p-0.5"
-                    />
-                    <div className="flex flex-col">
-                        <span className="text-lg font-medium text-white">Ankush Chhabra</span>
-                        <span className="text-sm text-neutral-500">xanny.me</span>
-                    </div>
+                  ) : (
+                    items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-800 group"
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          {item.type === "url" ? (
+                            <LinkIcon
+                              size={14}
+                              className="text-blue-400 flex-shrink-0"
+                            />
+                          ) : (
+                            <FileText
+                              size={14}
+                              className="text-orange-400 flex-shrink-0"
+                            />
+                          )}
+                          <span className="text-xs text-zinc-300 truncate">
+                            {item.name}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteDocument(item.id)}
+                          className="text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
-            </div>
+              </>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="flex-1 flex items-center justify-center p-8 text-center">
+          <p className="text-sm text-zinc-500">
+            Select or create a knowledge base to get started.
+          </p>
         </div>
-    );
+      )}
+
+      {/* User footer */}
+      <div className="p-3 border-t border-zinc-800 shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-medium shrink-0">
+              {user?.email?.charAt(0).toUpperCase() || "?"}
+            </div>
+            <span className="text-sm text-zinc-300 truncate">
+              {user?.email || "Unknown"}
+            </span>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="text-zinc-500 hover:text-zinc-300 p-1.5 rounded-lg hover:bg-zinc-800 transition-colors"
+            title="Log out"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

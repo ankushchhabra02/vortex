@@ -3,6 +3,7 @@ import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { Document } from "@langchain/core/documents";
 import { ragService } from "@/lib/rag-service-supabase";
+import { getAuthUser } from "@/lib/supabase/auth";
 
 // Security: Maximum file size (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -19,11 +20,9 @@ const ALLOWED_FILE_TYPES = [
 function isValidUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    // Only allow HTTPS (except localhost for development)
     if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost') {
       return false;
     }
-    // Block internal/private IPs
     const hostname = parsed.hostname.toLowerCase();
     if (
       hostname === 'localhost' ||
@@ -33,7 +32,6 @@ function isValidUrl(url: string): boolean {
       hostname.startsWith('172.16.') ||
       hostname === '0.0.0.0'
     ) {
-      // Allow localhost only in development
       return process.env.NODE_ENV === 'development';
     }
     return true;
@@ -44,11 +42,25 @@ function isValidUrl(url: string): boolean {
 
 export async function POST(req: NextRequest) {
   try {
+    // Authenticate user from session
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = user.id;
+
     const formData = await req.formData();
     const url = formData.get("url") as string;
     const file = formData.get("file") as File;
-    const knowledgeBaseId = formData.get("knowledgeBaseId") as string || 'default';
-    const userId = req.headers.get('x-user-id') || 'anonymous';
+    const knowledgeBaseId = formData.get("knowledgeBaseId") as string;
+
+    // Require a valid knowledge base ID
+    if (!knowledgeBaseId) {
+      return NextResponse.json(
+        { error: "Knowledge base ID is required" },
+        { status: 400 }
+      );
+    }
 
     let docs: Document[] = [];
     let metadata = {
@@ -60,7 +72,6 @@ export async function POST(req: NextRequest) {
 
     // Handle URL ingestion
     if (url) {
-      // Security: Validate URL
       if (!isValidUrl(url)) {
         return NextResponse.json(
           { error: "Invalid or unsafe URL" },
@@ -84,7 +95,6 @@ export async function POST(req: NextRequest) {
     }
     // Handle file upload
     else if (file) {
-      // Security: Validate file size
       if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json(
           { error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB` },
@@ -92,7 +102,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Security: Validate file type
       if (!ALLOWED_FILE_TYPES.includes(file.type) && !file.name.endsWith('.pdf')) {
         return NextResponse.json(
           { error: "Invalid file type. Allowed: PDF, TXT, MD, HTML" },
@@ -109,8 +118,7 @@ export async function POST(req: NextRequest) {
           metadata.fileType = 'pdf';
         } else {
           const text = await file.text();
-          // Security: Sanitize text length
-          if (text.length > 1000000) { // 1MB of text
+          if (text.length > 1000000) {
             return NextResponse.json(
               { error: "File content too large" },
               { status: 400 }
@@ -138,7 +146,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate we got documents
     if (!docs || docs.length === 0) {
       return NextResponse.json(
         { error: "No content extracted from source" },
@@ -146,7 +153,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Add documents to RAG system with Supabase
     const documentId = await ragService.addDocuments(
       userId,
       knowledgeBaseId,
