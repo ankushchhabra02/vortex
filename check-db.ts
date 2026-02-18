@@ -18,6 +18,11 @@ async function checkDB() {
             .select('*', { count: 'exact', head: true })
             .eq('knowledge_base_id', kb.id);
 
+        if (countError) {
+            console.error(`Error counting documents for KB ${kb.id}:`, countError);
+            continue;
+        }
+
         console.log(`KB "${kb.name}" (${kb.id}) has ${count} documents`);
 
         const { data: docs } = await supabaseAdmin

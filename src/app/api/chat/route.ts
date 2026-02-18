@@ -138,7 +138,6 @@ export async function POST(req: NextRequest) {
     }
 
     let context = "";
-    let retrievalError = "";
     if (knowledgeBaseId) {
       console.log(`[RAG] Retrieving context for KB: ${knowledgeBaseId}, Query: "${sanitizedQuery}"`);
       try {
@@ -148,7 +147,6 @@ export async function POST(req: NextRequest) {
         console.log(`[RAG] Retrieved context length: ${context.length}`);
       } catch (error) {
         console.error("[RAG] Error retrieving context:", error);
-        retrievalError = "Warning: Could not retrieve knowledge base context.";
       }
     }
 

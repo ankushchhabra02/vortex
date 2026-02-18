@@ -1,14 +1,21 @@
-// Lazy load transformers to avoid crashing on Vercel when native libraries are missing
-let transformers: any = null;
+let transformers: unknown = null;
 
 async function loadTransformers() {
   if (!transformers) {
     transformers = await import('@xenova/transformers');
     // Configure transformers.js
-    transformers.env.allowLocalModels = false;
-    transformers.env.useBrowserCache = false;
+    const t = transformers as {
+      env: { allowLocalModels: boolean; useBrowserCache: boolean };
+    };
+    t.env.allowLocalModels = false;
+    t.env.useBrowserCache = false;
   }
-  return transformers;
+  return transformers as {
+    pipeline: (
+      task: string,
+      model: string
+    ) => Promise<(text: string, options: Record<string, unknown>) => Promise<{ data: number[] }>>;
+  };
 }
 
 let embedder: unknown = null;
