@@ -57,8 +57,8 @@ export default function SignupPage() {
           router.refresh();
         }, 1500);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign up');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sign up');
     } finally {
       setLoading(false);
     }

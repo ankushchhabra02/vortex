@@ -10,7 +10,7 @@ interface KBCardProps {
   doc_count: number;
   conversation_count: number;
   embedding_provider: string;
-  embedding_model: string;
+  // embedding_model is not used in the UI, but was passed
   created_at: string;
   onDelete: (id: string) => void;
 }
@@ -22,7 +22,7 @@ export function KBCard({
   doc_count,
   conversation_count,
   embedding_provider,
-  embedding_model,
+  // embedding_model, // removed unused
   created_at,
   onDelete,
 }: KBCardProps) {

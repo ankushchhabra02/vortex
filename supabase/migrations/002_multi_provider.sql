@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
   llm_provider TEXT DEFAULT 'openrouter',
-  llm_model TEXT DEFAULT 'meta-llama/llama-3.2-3b-instruct:free',
+  llm_model TEXT DEFAULT 'openrouter/auto',
   embedding_provider TEXT DEFAULT 'xenova',
   embedding_model TEXT DEFAULT 'Xenova/all-MiniLM-L6-v2',
   temperature FLOAT DEFAULT 0.7,
@@ -39,8 +39,8 @@ DROP INDEX IF EXISTS document_chunks_embedding_idx;
 
 -- Drop and recreate embedding column without fixed dimensions
 ALTER TABLE document_chunks DROP COLUMN IF EXISTS embedding;
-ALTER TABLE document_chunks ADD COLUMN embedding vector;
-
+-- ALTER TABLE document_chunks ADD COLUMN embedding vector;
+ALTER TABLE document_chunks ADD COLUMN embedding vector(384);
 -- Recreate index (without fixed dimension — uses HNSW which supports variable dimensions)
 CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx
   ON document_chunks USING hnsw (embedding vector_cosine_ops);

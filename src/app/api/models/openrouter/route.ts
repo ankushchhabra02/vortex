@@ -11,7 +11,7 @@ interface OpenRouterModel {
   };
 }
 
-let cachedModels: { data: any[]; timestamp: number } | null = null;
+let cachedModels: { data: { id: string; name: string; contextWindow: number | null; free: boolean }[]; timestamp: number } | null = null;
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 export async function GET(req: NextRequest) {
@@ -25,10 +25,10 @@ export async function GET(req: NextRequest) {
     if (cachedModels && Date.now() - cachedModels.timestamp < CACHE_TTL) {
       const filtered = search
         ? cachedModels.data.filter(
-            (m) =>
-              m.id.toLowerCase().includes(search) ||
-              m.name.toLowerCase().includes(search)
-          )
+          (m) =>
+            m.id.toLowerCase().includes(search) ||
+            m.name.toLowerCase().includes(search)
+        )
         : cachedModels.data;
       return NextResponse.json({ models: filtered });
     }
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
           free: isFree,
         };
       })
-      .sort((a: any, b: any) => {
+      .sort((a: { id: string; name: string; free: boolean }, b: { id: string; name: string; free: boolean }) => {
         // Priority order: major providers first, then free, then alphabetical
         const providerOrder = [
           'openai/',
@@ -86,10 +86,10 @@ export async function GET(req: NextRequest) {
 
     const filtered = search
       ? models.filter(
-          (m: any) =>
-            m.id.toLowerCase().includes(search) ||
-            m.name.toLowerCase().includes(search)
-        )
+        (m: { id: string; name: string }) =>
+          m.id.toLowerCase().includes(search) ||
+          m.name.toLowerCase().includes(search)
+      )
       : models;
 
     return NextResponse.json({ models: filtered });

@@ -37,7 +37,7 @@ export default function ChatPage() {
       .then((r) => r.json())
       .then((data) => {
         const kb = (data.knowledgeBases || []).find(
-          (k: any) => k.id === kbId
+          (k: { id: string; name: string }) => k.id === kbId
         );
         if (kb) {
           setKbName(kb.name);

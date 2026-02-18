@@ -25,13 +25,16 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch conversations' }, { status: 500 });
     }
 
-    const formatted = (conversations || []).map((c: any) => ({
-      id: c.id,
-      title: c.title,
-      knowledge_base_id: c.knowledge_base_id,
-      kb_name: c.knowledge_bases?.name || 'Unknown',
-      updated_at: c.updated_at,
-    }));
+    const formatted = (conversations || []).map((c) => {
+      const kb = Array.isArray(c.knowledge_bases) ? c.knowledge_bases[0] : c.knowledge_bases;
+      return {
+        id: c.id,
+        title: c.title,
+        knowledge_base_id: c.knowledge_base_id,
+        kb_name: (kb as { name: string } | null)?.name || 'Unknown',
+        updated_at: c.updated_at,
+      };
+    });
 
     return NextResponse.json({ conversations: formatted });
   } catch (error) {

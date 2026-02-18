@@ -7,7 +7,6 @@ import {
   Settings,
   LogOut,
   Database,
-  MessageSquare,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";

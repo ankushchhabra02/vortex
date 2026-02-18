@@ -63,14 +63,14 @@ async function getKBEmbeddingConfig(kbId: string, userId: string): Promise<Embed
       .single();
 
     if (providerData) {
-      try { apiKey = decrypt(providerData.api_key_encrypted); } catch {}
+      try { apiKey = decrypt(providerData.api_key_encrypted); } catch { }
     }
   }
 
   return {
     provider: kb.embedding_provider as 'xenova' | 'openai',
     model: kb.embedding_model,
-    dimensions: kb.embedding_dimensions || getEmbeddingDimensions(kb.embedding_provider as any, kb.embedding_model),
+    dimensions: kb.embedding_dimensions || getEmbeddingDimensions(kb.embedding_provider as 'xenova' | 'openai', kb.embedding_model),
     apiKey,
   };
 }
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     }
 
     let docs: Document[] = [];
-    let metadata = {
+    const metadata = {
       title: '',
       sourceUrl: undefined as string | undefined,
       filePath: undefined as string | undefined,

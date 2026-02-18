@@ -27,7 +27,11 @@ export async function DELETE(
       .eq("id", id)
       .single();
 
-    if (!doc || (doc as any).knowledge_bases?.user_id !== user.id) {
+    interface DocWithUser {
+      knowledge_bases: { user_id: string };
+    }
+
+    if (!doc || (doc as unknown as DocWithUser).knowledge_bases?.user_id !== user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

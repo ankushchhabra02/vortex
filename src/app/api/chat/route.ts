@@ -20,7 +20,7 @@ async function getUserLLMConfig(userId: string) {
     .single();
 
   const provider = (settings?.llm_provider || 'openrouter') as LLMProvider;
-  const model = settings?.llm_model || 'meta-llama/llama-3.2-3b-instruct:free';
+  const model = settings?.llm_model || 'openrouter/auto';
   const temperature = settings?.temperature ?? 0.7;
 
   let apiKey = '';
@@ -73,14 +73,14 @@ async function getKBEmbeddingConfig(kbId: string, userId: string): Promise<Embed
       .single();
 
     if (providerData) {
-      try { apiKey = decrypt(providerData.api_key_encrypted); } catch {}
+      try { apiKey = decrypt(providerData.api_key_encrypted); } catch { }
     }
   }
 
   return {
     provider: kb.embedding_provider as 'xenova' | 'openai',
     model: kb.embedding_model,
-    dimensions: kb.embedding_dimensions || getEmbeddingDimensions(kb.embedding_provider as any, kb.embedding_model),
+    dimensions: kb.embedding_dimensions || getEmbeddingDimensions(kb.embedding_provider as 'xenova' | 'openai', kb.embedding_model),
     apiKey,
   };
 }
@@ -140,26 +140,38 @@ export async function POST(req: NextRequest) {
     let context = "";
     let retrievalError = "";
     if (knowledgeBaseId) {
+      console.log(`[RAG] Retrieving context for KB: ${knowledgeBaseId}, Query: "${sanitizedQuery}"`);
       try {
         const embeddingConfig = await getKBEmbeddingConfig(knowledgeBaseId, user.id);
+        console.log(`[RAG] Embedding Config:`, embeddingConfig);
         context = await ragService.getContext(sanitizedQuery, knowledgeBaseId, 5, embeddingConfig);
+        console.log(`[RAG] Retrieved context length: ${context.length}`);
       } catch (error) {
-        console.error("Error retrieving context:", error);
+        console.error("[RAG] Error retrieving context:", error);
         retrievalError = "Warning: Could not retrieve knowledge base context.";
       }
     }
 
-    const systemPrompt = context
-      ? `You are Vortex, a helpful AI assistant with access to a knowledge base.
-Use the following context to answer the user's question accurately. If the answer is not in the context, say so.
+    let docTitles = "None Available";
+    if (knowledgeBaseId) {
+      const { data: kbDocs } = await supabaseAdmin
+        .from("documents")
+        .select("title")
+        .eq("knowledge_base_id", knowledgeBaseId);
+      if (kbDocs && kbDocs.length > 0) {
+        docTitles = kbDocs.map(d => d.title).join(", ");
+      }
+    }
 
+    const systemPrompt = `You are Vortex, a helpful AI assistant.
+Current Knowledge Base Documents: ${docTitles}
+
+${context ? `Use the following context to answer accurately:
 CONTEXT:
 ${context}
+` : "You have access to a knowledge base, but no specific relevant content was found for this query. If the user asks about documents, confirm you have access to them but need a specific question to provide details."}
 
-Answer based on the context above. Be concise and helpful.`
-      : retrievalError
-        ? `You are Vortex, a helpful AI assistant. ${retrievalError} Please let the user know there was an issue retrieving context and answer to the best of your ability.`
-        : "You are Vortex, a helpful AI assistant. Answer questions concisely and helpfully.";
+IMPORTANT: Never say you cannot read or process files. You have direct access to the text content of the documents listed above through your knowledge base integration.`;
 
     const llmConfig = await getUserLLMConfig(user.id);
     const chat = createChatModel({
@@ -171,7 +183,7 @@ Answer based on the context above. Be concise and helpful.`
 
     const chatMessages = [
       new SystemMessage(systemPrompt),
-      ...limitedMessages.map((m: any) => {
+      ...limitedMessages.map((m: { role: string; content: string }) => {
         if (m.role === "user") return new HumanMessage(m.content);
         if (m.role === "assistant") return new AIMessage(m.content);
         return new SystemMessage(m.content);

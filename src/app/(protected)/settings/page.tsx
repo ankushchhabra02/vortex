@@ -63,7 +63,7 @@ export default function SettingsPage() {
       if (kbRes.ok) {
         const data = await kbRes.json();
         setKnowledgeBases(
-          (data.knowledgeBases || []).map((kb: any) => ({
+          (data.knowledgeBases || []).map((kb: { id: string; name: string }) => ({
             id: kb.id,
             name: kb.name,
           }))
@@ -88,7 +88,7 @@ export default function SettingsPage() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const updateSettings = (key: keyof Settings, value: any) => {
+  const updateSettings = (key: keyof Settings, value: string | number | boolean) => {
     if (!settings) return;
     setSettings({ ...settings, [key]: value });
     setDirty(true);

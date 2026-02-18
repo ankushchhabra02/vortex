@@ -75,7 +75,7 @@ export function IngestPanel({
       const res = await fetch(`/api/knowledge-bases/${kbId}/documents?page=${pageNum}&limit=20`);
       if (!res.ok) return;
       const data = await res.json();
-      const mapped = (data.documents || []).map((doc: any) => ({
+      const mapped = (data.documents || []).map((doc: { source_url?: string; title?: string; file_path?: string; id: string }) => ({
         type: doc.source_url ? "url" : "file",
         name: doc.title || doc.file_path || "Untitled",
         id: doc.id,
@@ -122,8 +122,9 @@ export function IngestPanel({
       ]);
       setUrl("");
       toast("URL ingested successfully", "success");
-    } catch (error: any) {
-      toast(error.message || "Failed to ingest URL", "error");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to ingest URL";
+      toast(msg, "error");
     } finally {
       setIsIngesting(false);
     }
@@ -156,8 +157,9 @@ export function IngestPanel({
       ]);
       e.target.value = "";
       toast("File uploaded successfully", "success");
-    } catch (error: any) {
-      toast(error.message || "Failed to upload file", "error");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to upload file";
+      toast(msg, "error");
     } finally {
       setIsIngesting(false);
     }

@@ -4,7 +4,7 @@ import { pipeline, env } from '@xenova/transformers';
 env.allowLocalModels = false;
 env.useBrowserCache = false;
 
-let embedder: any = null;
+let embedder: unknown = null;
 
 /**
  * Get or initialize the embedding model
@@ -28,7 +28,7 @@ async function getEmbedder() {
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   try {
-    const model = await getEmbedder();
+    const model = await getEmbedder() as (text: string, options: Record<string, unknown>) => Promise<{ data: number[] }>;
     const output = await model(text, {
       pooling: 'mean',
       normalize: true,

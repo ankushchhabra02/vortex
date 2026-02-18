@@ -62,7 +62,7 @@ describe('generateEmbeddingWithConfig', () => {
 
   it('throws for unsupported provider', async () => {
     const config = {
-      provider: 'unsupported' as any,
+      provider: 'unsupported' as unknown as 'xenova',
       model: 'some-model',
       dimensions: 768,
     };

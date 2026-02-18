@@ -35,13 +35,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch knowledge bases" }, { status: 500 });
     }
 
-    const formatted = (knowledgeBases || []).map((kb: any) => ({
-      ...kb,
-      doc_count: kb.documents?.[0]?.count ?? 0,
-      conversation_count: kb.conversations?.[0]?.count ?? 0,
-      documents: undefined,
-      conversations: undefined,
-    }));
+    interface KBWithCounts {
+      documents: { count: number }[];
+      conversations: { count: number }[];
+    }
+
+    const formatted = (knowledgeBases || []).map((kb) => {
+      const kbc = kb as unknown as KBWithCounts;
+      return {
+        ...kb,
+        doc_count: kbc.documents?.[0]?.count ?? 0,
+        conversation_count: kbc.conversations?.[0]?.count ?? 0,
+        documents: undefined,
+        conversations: undefined,
+      };
+    });
 
     return NextResponse.json({ knowledgeBases: formatted, total: count ?? 0, page, limit });
   } catch {

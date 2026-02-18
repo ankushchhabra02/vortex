@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Eye, EyeOff, Check, X, Loader2, Trash2, Shield } from "lucide-react";
 import { LLM_PROVIDERS } from "@/lib/providers/types";
-import type { LLMProvider } from "@/lib/providers/types";
 
 interface ProviderKey {
   provider: string;
@@ -122,11 +121,10 @@ export function APIKeyManager({
 
           {verifyResult[p.key] && (
             <div
-              className={`text-xs px-3 py-1.5 rounded mb-2 ${
-                verifyResult[p.key].valid
+              className={`text-xs px-3 py-1.5 rounded mb-2 ${verifyResult[p.key].valid
                   ? "bg-green-900/20 text-green-400 border border-green-800/30"
                   : "bg-red-900/20 text-red-400 border border-red-800/30"
-              }`}
+                }`}
             >
               {verifyResult[p.key].valid ? (
                 <Check size={12} className="inline mr-1" />

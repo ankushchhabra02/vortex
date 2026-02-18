@@ -6,7 +6,7 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 
 interface Document {
   pageContent: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export class RAGService {
@@ -56,7 +56,6 @@ export class RAGService {
         allChunks.push(...chunks);
       }
 
-      console.log(`Generating embeddings for ${allChunks.length} chunks...`);
       const embeddings = await Promise.all(
         allChunks.map((chunk) =>
           embeddingConfig
@@ -81,7 +80,6 @@ export class RAGService {
         throw new Error('Failed to insert document chunks');
       }
 
-      console.log(`Successfully added ${allChunks.length} chunks to database`);
       return doc.id;
     } catch (error) {
       console.error('Error in addDocuments:', error);
@@ -120,6 +118,11 @@ export class RAGService {
         throw new Error('Failed to perform similarity search');
       }
 
+      console.log(`[RAG] Similarity search found ${data?.length || 0} matches`);
+      if (data && data.length > 0) {
+        console.log(`[RAG] Best match similarity: ${data[0].similarity.toFixed(4)}`);
+      }
+
       return data || [];
     } catch (error) {
       console.error('Error in similaritySearch:', error);
@@ -131,12 +134,13 @@ export class RAGService {
     query: string,
     knowledgeBaseId?: string,
     maxChunks: number = 5,
-    embeddingConfig?: EmbeddingConfig
+    embeddingConfig?: EmbeddingConfig,
+    matchThreshold: number = 0.3
   ): Promise<string> {
     const results = await this.similaritySearch(
       query,
       knowledgeBaseId,
-      0.5,
+      matchThreshold,
       maxChunks,
       embeddingConfig
     );

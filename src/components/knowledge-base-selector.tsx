@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Plus, ChevronDown, Trash2, Database, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,23 +24,7 @@ export function KnowledgeBaseSelector({ activeKbId, onSelect }: KnowledgeBaseSel
   const [loading, setLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetchKnowledgeBases();
-  }, []);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-        setIsCreating(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const fetchKnowledgeBases = async () => {
+  const fetchKnowledgeBases = useCallback(async () => {
     try {
       const res = await fetch("/api/knowledge-bases");
       if (!res.ok) return;
@@ -54,7 +38,23 @@ export function KnowledgeBaseSelector({ activeKbId, onSelect }: KnowledgeBaseSel
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeKbId, onSelect]);
+
+  useEffect(() => {
+    fetchKnowledgeBases();
+  }, [fetchKnowledgeBases]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+        setIsCreating(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const createKnowledgeBase = async () => {
     if (!newName.trim()) return;

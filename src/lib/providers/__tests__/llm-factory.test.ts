@@ -2,19 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createChatModel } from '../llm-factory';
 import type { ProviderConfig } from '../types';
 
-let openAICalls: any[] = [];
-let anthropicCalls: any[] = [];
+let openAICalls: Record<string, unknown>[] = [];
+let anthropicCalls: Record<string, unknown>[] = [];
 
 // Mock with classes since the factory uses `new`
 vi.mock('@langchain/openai', () => ({
   ChatOpenAI: class MockChatOpenAI {
     _type = 'ChatOpenAI';
-    apiKey: string;
-    modelName: string;
-    streaming: boolean;
-    temperature: number;
-    configuration?: any;
-    constructor(config: any) {
+    apiKey = '';
+    modelName = '';
+    streaming = false;
+    temperature = 0;
+    configuration?: Record<string, unknown>;
+    constructor(config: Record<string, unknown>) {
       Object.assign(this, config);
       openAICalls.push(config);
     }
@@ -24,11 +24,11 @@ vi.mock('@langchain/openai', () => ({
 vi.mock('@langchain/anthropic', () => ({
   ChatAnthropic: class MockChatAnthropic {
     _type = 'ChatAnthropic';
-    apiKey: string;
-    modelName: string;
-    streaming: boolean;
-    temperature: number;
-    constructor(config: any) {
+    apiKey = '';
+    modelName = '';
+    streaming = false;
+    temperature = 0;
+    constructor(config: Record<string, unknown>) {
       Object.assign(this, config);
       anthropicCalls.push(config);
     }
@@ -48,7 +48,14 @@ describe('createChatModel', () => {
       model: 'gpt-4',
       temperature: 0.5,
     };
-    const model = createChatModel(config) as any;
+    interface MockModel {
+      _type: string;
+      apiKey: string;
+      modelName: string;
+      temperature: number;
+      streaming: boolean;
+    }
+    const model = createChatModel(config) as unknown as MockModel;
     expect(model._type).toBe('ChatOpenAI');
     expect(model.apiKey).toBe('sk-test-key');
     expect(model.modelName).toBe('gpt-4');
@@ -63,7 +70,13 @@ describe('createChatModel', () => {
       model: 'claude-3-opus',
       temperature: 0.3,
     };
-    const model = createChatModel(config) as any;
+    interface MockModel {
+      apiKey: string;
+      modelName: string;
+      temperature: number;
+      streaming: boolean;
+    }
+    const model = createChatModel(config) as unknown as MockModel;
     // The dynamic require() in llm-factory may not use vitest mock,
     // so verify by checking the returned model has the right config
     expect(model.apiKey).toBe('sk-ant-test');
@@ -100,7 +113,7 @@ describe('createChatModel', () => {
 
   it('throws for unsupported provider', () => {
     const config = {
-      provider: 'unknown-provider' as any,
+      provider: 'unknown-provider' as unknown as 'openai',
       apiKey: 'key',
       model: 'model',
     };
@@ -113,7 +126,7 @@ describe('createChatModel', () => {
       apiKey: 'key',
       model: 'gpt-4',
     };
-    const model = createChatModel(config) as any;
+    const model = createChatModel(config) as unknown as { temperature: number };
     expect(model.temperature).toBe(0.7);
   });
 });

@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
     const allowed = ['llm_provider', 'llm_model', 'embedding_provider', 'embedding_model', 'temperature'];
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
 
     for (const key of allowed) {
       if (body[key] !== undefined) {
