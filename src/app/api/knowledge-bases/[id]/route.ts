@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { generalLimiter, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function DELETE(
   req: NextRequest,
@@ -10,6 +11,9 @@ export async function DELETE(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = generalLimiter.check(user.id);
+  if (!rl.success) return rateLimitResponse(rl.resetMs);
 
   const { id } = await params;
 

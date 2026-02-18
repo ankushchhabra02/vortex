@@ -5,6 +5,7 @@ import { Send, Bot, User, Database, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 
 interface ChatInterfaceProps {
   knowledgeBaseId: string | null;
@@ -23,6 +24,8 @@ export function ChatInterface({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [totalMessages, setTotalMessages] = useState(0);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeConversationRef = useRef<string | null>(null);
 
@@ -33,6 +36,7 @@ export function ChatInterface({
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
+      setTotalMessages(0);
       return;
     }
 
@@ -51,11 +55,12 @@ export function ChatInterface({
           content: m.content,
         }));
         setMessages(msgs);
+        setTotalMessages(data.total ?? msgs.length);
       })
-      .catch((err) => {
+      .catch(() => {
         if (cancelled) return;
-        console.error("Failed to load conversation:", err);
         setMessages([]);
+        setTotalMessages(0);
       })
       .finally(() => {
         if (!cancelled) setLoadingHistory(false);
@@ -65,6 +70,39 @@ export function ChatInterface({
       cancelled = true;
     };
   }, [conversationId]);
+
+  const loadOlderMessages = async () => {
+    if (!conversationId || loadingOlder) return;
+    // Calculate which page of older messages to load
+    const loaded = messages.length;
+    const remaining = totalMessages - loaded;
+    if (remaining <= 0) return;
+
+    setLoadingOlder(true);
+    try {
+      // Fetch from page 1 with the right limit to get the older chunk
+      const olderLimit = Math.min(50, remaining);
+      const res = await fetch(
+        `/api/conversations/${conversationId}?page=1&limit=${olderLimit}`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      const olderMsgs = (data.messages || [])
+        .slice(0, remaining > olderLimit ? olderLimit : remaining)
+        .map((m: any) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        }));
+      if (olderMsgs.length > 0) {
+        setMessages((prev) => [...olderMsgs, ...prev]);
+        setTotalMessages(data.total ?? totalMessages);
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -100,7 +138,13 @@ export function ChatInterface({
         }),
       });
 
-      if (!res.ok) throw new Error(res.statusText);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const code = body?.code;
+        if (code === "RATE_LIMITED") throw new Error("Too many requests. Please wait a moment and try again.");
+        if (code === "PROVIDER_ERROR") throw new Error("The AI provider is temporarily unavailable. Please try again.");
+        throw new Error(body?.error || "Failed to get response");
+      }
 
       // Check if a new conversation was created
       const newConvId = res.headers.get("X-Conversation-Id");
@@ -133,10 +177,16 @@ export function ChatInterface({
         });
       }
     } catch (error) {
-      console.error(error);
+      const errMsg =
+        error instanceof Error && error.message
+          ? error.message
+          : "Failed to get response";
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Error: Failed to get response." },
+        {
+          role: "assistant",
+          content: `Something went wrong: ${errMsg}. Please try again.`,
+        },
       ]);
     } finally {
       setIsLoading(false);
@@ -179,6 +229,21 @@ export function ChatInterface({
           </div>
         ) : (
           <div className="max-w-4xl mx-auto p-3 sm:p-4 lg:p-6 space-y-4">
+            {totalMessages > messages.length && (
+              <div className="flex justify-center">
+                <button
+                  onClick={loadOlderMessages}
+                  disabled={loadingOlder}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50 py-2"
+                >
+                  {loadingOlder ? (
+                    <Loader2 size={14} className="inline animate-spin" />
+                  ) : (
+                    `Load older messages (${totalMessages - messages.length} more)`
+                  )}
+                </button>
+              </div>
+            )}
             {messages.map((m, i) => (
               <div
                 key={i}
@@ -215,7 +280,7 @@ export function ChatInterface({
                         </span>
                       </div>
                     ) : (
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                         {m.content}
                       </ReactMarkdown>
                     )}

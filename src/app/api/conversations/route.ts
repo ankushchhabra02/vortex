@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { generalLimiter, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
@@ -8,25 +9,38 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const rl = generalLimiter.check(user.id);
+  if (!rl.success) return rateLimitResponse(rl.resetMs);
+
   const knowledgeBaseId = req.nextUrl.searchParams.get("knowledgeBaseId");
+  const page = Math.max(1, parseInt(req.nextUrl.searchParams.get("page") || "1", 10));
+  const limit = Math.min(50, Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") || "20", 10)));
+  const offset = (page - 1) * limit;
+
+  let countQuery = supabaseAdmin
+    .from("conversations")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
 
   let query = supabaseAdmin
     .from("conversations")
     .select("*")
     .eq("user_id", user.id)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .range(offset, offset + limit - 1);
 
   if (knowledgeBaseId) {
+    countQuery = countQuery.eq("knowledge_base_id", knowledgeBaseId);
     query = query.eq("knowledge_base_id", knowledgeBaseId);
   }
 
-  const { data, error } = await query;
+  const [{ count }, { data, error }] = await Promise.all([countQuery, query]);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "An unexpected error occurred", code: "INTERNAL_ERROR" }, { status: 500 });
   }
 
-  return NextResponse.json({ conversations: data || [] });
+  return NextResponse.json({ conversations: data || [], total: count ?? 0, page, limit });
 }
 
 export async function POST(req: NextRequest) {
@@ -34,6 +48,9 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = generalLimiter.check(user.id);
+  if (!rl.success) return rateLimitResponse(rl.resetMs);
 
   const body = await req.json();
   const { knowledgeBaseId, title } = body;
@@ -56,7 +73,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "An unexpected error occurred", code: "INTERNAL_ERROR" }, { status: 500 });
   }
 
   return NextResponse.json({ conversation: data });

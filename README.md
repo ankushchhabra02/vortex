@@ -1,325 +1,245 @@
-# 🌀 Vortex - Free RAG Chat Application
+<p align="center">
+  <h1 align="center">Vortex</h1>
+  <p align="center">Open-source RAG chat application with multi-provider LLM support</p>
+</p>
 
-> A production-ready RAG (Retrieval-Augmented Generation) chat application built with Next.js, Supabase, and completely **FREE** AI models.
+<p align="center">
+  <a href="https://github.com/ankushchhabra02/vortex/actions/workflows/ci.yml"><img src="https://github.com/ankushchhabra02/vortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://github.com/ankushchhabra02/vortex/issues"><img src="https://img.shields.io/github/issues/ankushchhabra02/vortex" alt="Issues"></a>
+</p>
 
-## ✨ Features
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#architecture">Architecture</a> &middot;
+  <a href="#deployment">Deployment</a> &middot;
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
-- 🔐 **User Authentication** - Secure sign-up/login with Supabase Auth
-- 📚 **Knowledge Bases** - Create multiple knowledge bases per user
-- 📄 **Document Ingestion** - Upload PDFs and ingest web URLs
-- 🔍 **Vector Search** - Semantic search using free Transformers.js embeddings
-- 💬 **Streaming Chat** - Real-time responses using OpenRouter's free models
-- 💾 **Conversation History** - Persistent chat history per knowledge base with tabbed sidebar
-- 🗂️ **Tabbed Sidebar** - Switch between Chats and Documents in a single sidebar
-- 🔒 **Security First** - Input validation, SSRF protection, RLS policies
-- 🎨 **Modern UI** - Clean, responsive interface with dark mode support
+---
 
-## 💰 Completely FREE Stack
+Vortex is a self-hosted RAG (Retrieval-Augmented Generation) application that lets you chat with your documents using any LLM provider. Upload PDFs, ingest URLs, and get accurate answers grounded in your own knowledge bases — all with a clean, modern interface.
 
-| Component | Solution | Cost |
-|-----------|----------|------|
-| **Database** | Supabase (500MB) | FREE |
-| **Vector Storage** | Supabase pgvector | FREE |
-| **Embeddings** | Transformers.js (local) | FREE |
-| **LLM** | OpenRouter free models | FREE |
-| **Hosting** | Vercel | FREE |
-| **Total Monthly Cost** | | **$0** |
+**Works out of the box with free models. No API key required to get started.**
 
-## 🚀 Quick Start
+## Features
+
+- **Multi-Provider LLM Support** — OpenAI, Anthropic, xAI (Grok), and OpenRouter. Switch providers and models from the settings page. Free models available via OpenRouter with zero configuration.
+- **Switchable Embedding Models** — Local embeddings via Xenova/Transformers.js (free, no API key) or OpenAI embeddings (text-embedding-3-small/large). Embedding model is locked per knowledge base to prevent dimension mismatches.
+- **Knowledge Base Management** — Create multiple knowledge bases, each with its own embedding model. Dashboard shows document counts, conversation counts, and model badges.
+- **Document Ingestion** — Upload PDFs and text files, or ingest content from any URL. Documents are chunked and embedded automatically.
+- **Streaming Chat** — Real-time streaming responses with conversation persistence. Full chat history per knowledge base.
+- **Settings Page** — Configure LLM provider, model, temperature, API keys, and default embedding model. API keys are encrypted at rest with AES-256-GCM.
+- **Authentication** — Email/password auth via Supabase with server-side session checks. All data is isolated per user with Row Level Security.
+- **Responsive Design** — Works on desktop and mobile with collapsible sidebar navigation.
+
+## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ installed
-- A Supabase account ([sign up free](https://supabase.com))
-- An OpenRouter API key ([get free key](https://openrouter.ai))
+- Node.js 18+
+- A [Supabase](https://supabase.com) account (free tier works)
+- An [OpenRouter](https://openrouter.ai) API key (optional — free models work without one)
 
-### 1. Clone the Repository
+### Setup
 
 ```bash
-git clone https://github.com/ankushchhabradelta4infotech-ai/vortex.git
+# Clone and install
+git clone https://github.com/ankushchhabra02/vortex.git
 cd vortex
-```
-
-### 2. Install Dependencies
-
-```bash
 npm install
+
+# Configure environment
+cp .env.example .env.local
+# Edit .env.local with your Supabase and OpenRouter credentials
 ```
 
-### 3. Set Up Supabase
+### Database Setup
 
-#### Create a Supabase Project
+1. Create a new Supabase project
+2. In the SQL Editor, run these migrations in order:
+   - `supabase/migrations/001_initial_schema.sql`
+   - `supabase/migrations/002_multi_provider.sql`
+3. Copy your project URL, anon key, and service role key into `.env.local`
 
-1. Go to [https://supabase.com](https://supabase.com)
-2. Click "New Project"
-3. Choose a name and region
-4. Wait ~2 minutes for setup
+### Generate Encryption Key
 
-#### Run Database Migration
-
-1. In Supabase Dashboard, go to **SQL Editor**
-2. Click "New Query"
-3. Copy the entire contents of `supabase/migrations/001_initial_schema.sql`
-4. Paste and click "Run"
-
-#### Get API Keys
-
-1. Go to **Settings** → **API**
-2. Copy these values:
-   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
-   - **anon public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY`
-
-### 4. Get OpenRouter API Key
-
-1. Go to [https://openrouter.ai](https://openrouter.ai)
-2. Sign up / Log in
-3. Go to **Keys** section
-4. Create new key
-5. Copy the key → `OPENROUTER_API_KEY`
-
-### 5. Configure Environment Variables
+The encryption key is used to encrypt API keys stored in the database:
 
 ```bash
-cp .env.example .env.local
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Edit `.env.local`:
+Add the output as `ENCRYPTION_KEY` in `.env.local`.
 
-```env
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
-
-# OpenRouter (uses FREE models)
-OPENROUTER_API_KEY=sk-or-v1-your-key-here
-
-# App
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-### 6. Run Development Server
+### Run
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) 🎉
+Open [http://localhost:3000](http://localhost:3000), create an account, and start building knowledge bases.
 
-### 7. Create Your Account
+## Environment Variables
 
-1. Click "Sign Up"
-2. Enter email and password
-3. Start chatting!
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anonymous key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key |
+| `OPENROUTER_API_KEY` | No | OpenRouter API key (free models work without it) |
+| `ENCRYPTION_KEY` | Yes | 32-byte hex string for encrypting stored API keys |
+| `NEXT_PUBLIC_APP_URL` | No | App URL (defaults to localhost:3000) |
 
-## 📖 How to Use
-
-### 1. Create a Knowledge Base
-
-After logging in, create a knowledge base from the sidebar. You can create multiple knowledge bases to organize different topics or projects.
-
-### 2. Add Documents
-
-**Upload PDF:**
-1. Click file upload icon
-2. Select a PDF file (max 10MB)
-3. Wait for processing
-
-**Ingest URL:**
-1. Click URL input
-2. Paste any HTTPS URL
-3. Click ingest
-
-### 3. Chat with Your Knowledge Base
-
-1. Type your question
-2. Vortex will search your documents
-3. Get accurate answers with source citations
-
-### 4. View Conversation History
-
-- All conversations are automatically saved to the database
-- Switch to the **Chats** tab in the sidebar to see past conversations
-- Click any conversation to load its full message history
-- Click **New Chat** to start a fresh conversation
-- Each knowledge base has its own separate chat history
-
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────┐
-│      Frontend (Next.js + React)    │
-│  - Chat Interface                   │
-│  - Document Management              │
-│  - Authentication UI                │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│      API Routes (Next.js)           │
-│  - /api/chat                        │
-│  - /api/ingest                      │
-│  - /api/conversations               │
-│  - /api/knowledge-bases             │
-│  - /api/documents                   │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│      RAG Service                    │
-│  - Transformers.js (Embeddings)     │
-│  - Text Chunking                    │
-│  - Vector Search                    │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│   Supabase (Database + Auth)        │
-│  - PostgreSQL + pgvector            │
-│  - Row Level Security               │
-│  - User Management                  │
-└─────────────────────────────────────┘
+Browser
+  │
+  ├── Dashboard (/)           ← KB cards, recent conversations
+  ├── Chat (/chat/[kbId])     ← Streaming chat + document sidebar
+  └── Settings (/settings)    ← Provider config, API keys, embedding model
+        │
+        ▼
+  Next.js API Routes
+  ├── /api/chat               ← LLM streaming via provider factory
+  ├── /api/ingest             ← Document chunking + embedding
+  ├── /api/settings           ← User preferences + encrypted API keys
+  ├── /api/knowledge-bases    ← KB CRUD with doc/conversation counts
+  └── /api/conversations      ← Chat history CRUD
+        │
+        ▼
+  Provider Abstraction Layer
+  ├── LLM Factory             ← OpenAI, Anthropic, OpenRouter, xAI
+  ├── Embedding Factory       ← Xenova (local) or OpenAI API
+  └── Crypto                  ← AES-256-GCM key encryption
+        │
+        ▼
+  Supabase
+  ├── PostgreSQL + pgvector   ← Documents, chunks, embeddings
+  ├── Auth                    ← Email/password authentication
+  └── Row Level Security      ← Per-user data isolation
 ```
 
-## 🗄️ Database Schema
+### How RAG Works in Vortex
 
-- `knowledge_bases` - User's knowledge collections
-- `documents` - Uploaded/ingested content
-- `document_chunks` - Text chunks with embeddings (384-dim)
-- `conversations` - Chat threads
-- `messages` - Individual chat messages
+1. **Ingest** — Documents are split into chunks (~1000 chars) and each chunk is embedded using the KB's configured embedding model. Chunks and vectors are stored in pgvector.
+2. **Query** — When you ask a question, the query is embedded with the same model, then pgvector finds the most similar chunks via cosine distance.
+3. **Generate** — The top matching chunks are injected into the system prompt, and the selected LLM generates a grounded response.
 
-All tables have Row Level Security (RLS) for multi-user isolation.
+## Database Schema
 
-## 🔒 Security Features
+| Table | Purpose |
+|-------|---------|
+| `knowledge_bases` | User's KB collections with embedding model config |
+| `documents` | Uploaded/ingested content metadata |
+| `document_chunks` | Text chunks with vector embeddings |
+| `conversations` | Chat threads linked to knowledge bases |
+| `messages` | Individual chat messages |
+| `user_settings` | LLM/embedding preferences per user |
+| `user_providers` | Encrypted API keys per provider per user |
 
-✅ URL validation (SSRF protection)
-✅ File type validation
-✅ File size limits (10MB)
-✅ Input sanitization
-✅ Authentication required
-✅ Row Level Security (RLS)
-✅ Prompt injection protection
-✅ Rate limiting ready
+All tables have Row Level Security policies. Users can only access their own data.
 
-## 🚢 Deployment
+## Tech Stack
 
-### Deploy to Vercel
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16 (App Router, Turbopack) |
+| UI | React 19, Tailwind CSS v4 |
+| Database | Supabase (PostgreSQL + pgvector) |
+| Auth | Supabase Auth via @supabase/ssr |
+| LLM | LangChain (ChatOpenAI, ChatAnthropic) |
+| Embeddings | Transformers.js (local) or OpenAI API |
+| Document Loading | LangChain (PDF, Cheerio) |
 
-1. Push code to GitHub
-2. Go to [vercel.com](https://vercel.com)
-3. Click "Import Project"
-4. Select your repository
-5. Add environment variables:
-   ```
-   NEXT_PUBLIC_SUPABASE_URL
-   NEXT_PUBLIC_SUPABASE_ANON_KEY
-   SUPABASE_SERVICE_ROLE_KEY
-   OPENROUTER_API_KEY
-   NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
-   ```
-6. Deploy!
-
-## 🛠️ Tech Stack
-
-### Frontend
-- **Next.js 16** - React framework
-- **React 19** - UI library
-- **TypeScript** - Type safety
-- **Tailwind CSS v4** - Styling
-- **Lucide Icons** - Icons
-
-### Backend
-- **Next.js API Routes** - Server endpoints
-- **Supabase** - Database + Auth
-- **@supabase/ssr** - Cookie-based auth for Next.js
-- **pgvector** - Vector similarity search
-- **LangChain** - Document processing
-
-### AI/ML
-- **Transformers.js** - FREE local embeddings (Xenova/all-MiniLM-L6-v2)
-- **OpenRouter** - FREE LLM access (meta-llama/llama-3.2-3b-instruct:free)
-
-## 📁 Project Structure
+## Project Structure
 
 ```
-vortex/
-├── src/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── chat/              # Streaming chat with message persistence
-│   │   │   ├── ingest/            # Document ingestion (PDF, URL)
-│   │   │   ├── conversations/     # CRUD for conversations
-│   │   │   ├── knowledge-bases/   # CRUD for knowledge bases
-│   │   │   └── documents/         # Document deletion
-│   │   ├── auth/callback/         # Supabase auth callback
-│   │   ├── login/                 # Login page
-│   │   ├── signup/                # Signup page
-│   │   ├── layout.tsx             # Root layout
-│   │   └── page.tsx               # Home page
-│   ├── components/
-│   │   ├── chat-interface.tsx     # Chat UI with conversation loading
-│   │   ├── ingest-panel.tsx       # Tabbed sidebar (Chats/Documents)
-│   │   ├── conversation-list.tsx  # Conversation list & management
-│   │   ├── knowledge-base-selector.tsx
-│   │   └── toast.tsx              # Toast notification system
-│   └── lib/
-│       ├── supabase/
-│       │   ├── client.ts          # Browser client (lazy proxy)
-│       │   ├── server.ts          # Server client (admin + authenticated)
-│       │   ├── auth.ts            # Auth helper for API routes
-│       │   └── database.types.ts  # TypeScript types
-│       ├── embeddings.ts          # FREE local embeddings
-│       └── rag-service-supabase.ts
-├── src/middleware.ts               # Auth middleware
-├── supabase/
-│   └── migrations/                # Database schema
-├── .env.example
-└── README.md
+src/
+├── app/
+│   ├── (protected)/              # Auth-guarded route group
+│   │   ├── page.tsx              # Dashboard
+│   │   ├── chat/[kbId]/page.tsx  # Chat interface
+│   │   ├── settings/page.tsx     # Settings page
+│   │   └── layout.tsx            # Auth check
+│   ├── api/
+│   │   ├── chat/                 # LLM streaming + message persistence
+│   │   ├── ingest/               # Document ingestion
+│   │   ├── settings/             # User settings + API key management
+│   │   ├── knowledge-bases/      # KB CRUD
+│   │   ├── conversations/        # Chat history + recent conversations
+│   │   └── documents/            # Document deletion
+│   ├── login/                    # Public login page
+│   ├── signup/                   # Public signup page
+│   └── auth/callback/            # Supabase auth callback
+├── components/
+│   ├── dashboard/                # KB cards, recent chats, create dialog
+│   ├── settings/                 # Provider selector, API key manager, embedding selector
+│   ├── layout/                   # Shared sidebar navigation
+│   ├── chat-interface.tsx        # Chat UI with streaming
+│   ├── ingest-panel.tsx          # Tabbed sidebar (Chats/Documents)
+│   └── toast.tsx                 # Toast notifications
+└── lib/
+    ├── providers/                # Multi-provider abstraction
+    │   ├── types.ts              # Provider types + model catalogs
+    │   ├── llm-factory.ts        # LLM provider factory
+    │   ├── embedding-factory.ts  # Embedding provider factory
+    │   └── crypto.ts             # AES-256-GCM encryption
+    ├── supabase/                 # Supabase clients + auth helpers
+    ├── embeddings.ts             # Xenova/Transformers.js embeddings
+    └── rag-service-supabase.ts   # RAG pipeline (chunk, embed, search)
 ```
 
-## 🐛 Troubleshooting
+## Deployment
 
-### "Unauthorized" errors
-- Check your Supabase keys are correct
-- Verify you're logged in
-- Check browser console for auth errors
+### Vercel
 
-### Embeddings not generating
-- Check Node.js version (18+)
-- Clear `.next` cache: `rm -rf .next`
-- Restart dev server
+1. Push to GitHub
+2. Import the repository on [vercel.com](https://vercel.com)
+3. Add all environment variables from the table above
+4. Deploy
 
-### Chat not responding
-- Verify OpenRouter API key
-- Check model name is correct
-- Look for errors in terminal
+The app uses server-side auth checks (no Edge middleware), so it works on all Vercel runtimes without issues.
 
-### Database connection fails
-- Verify Supabase project is active
-- Check URL and keys are correct
-- Ensure migration was run successfully
+### Self-Hosted
 
-## 🤝 Contributing
+Any platform that runs Node.js 18+ works. Build with `npm run build` and start with `npm start`.
 
-Contributions welcome! Please:
+## Security
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+- API keys encrypted at rest (AES-256-GCM)
+- Server-side authentication on all protected routes
+- Row Level Security on all database tables
+- URL validation with SSRF protection
+- File type and size validation
+- Input sanitization and length limits
 
-## 📄 License
+## Troubleshooting
 
-MIT License - feel free to use for personal or commercial projects
+**"Unauthorized" errors** — Verify your Supabase keys are correct and you're logged in. Check the browser console for auth errors.
 
-## 🔗 Links
+**Embeddings not generating** — Ensure Node.js 18+. Try clearing the cache with `rm -rf .next` and restarting.
 
-- [Supabase Documentation](https://supabase.com/docs)
-- [OpenRouter Models](https://openrouter.ai/models)
-- [Transformers.js](https://huggingface.co/docs/transformers.js)
-- [Next.js Documentation](https://nextjs.org/docs)
+**Chat not responding** — Check your LLM provider settings. If using a paid model, verify the API key is set and valid in Settings.
 
-## ⭐ Star this repo if you found it helpful!
+**Database errors after update** — Make sure you've run both SQL migrations in order. The second migration (`002_multi_provider.sql`) drops and recreates the embedding column — existing embeddings will need to be re-ingested.
+
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on the development workflow, code guidelines, and how to submit pull requests.
+
+We also ask that all participants follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+If you discover a security vulnerability, please follow our [Security Policy](SECURITY.md). Do not open a public issue for security vulnerabilities.
+
+## License
+
+MIT
 
 ---
 
-Built with ❤️ using completely FREE and open-source technologies
+Built with Next.js, Supabase, LangChain, and Transformers.js.

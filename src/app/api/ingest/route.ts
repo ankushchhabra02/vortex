@@ -4,11 +4,14 @@ import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { Document } from "@langchain/core/documents";
 import { ragService } from "@/lib/rag-service-supabase";
 import { getAuthUser } from "@/lib/supabase/auth";
+import { supabaseAdmin } from "@/lib/supabase/server";
+import { decrypt } from "@/lib/providers/crypto";
+import type { EmbeddingConfig } from "@/lib/providers/types";
+import { getEmbeddingDimensions } from "@/lib/providers/types";
+import { ingestLimiter, rateLimitResponse } from "@/lib/rate-limit";
 
-// Security: Maximum file size (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-// Security: Allowed file types
 const ALLOWED_FILE_TYPES = [
   'application/pdf',
   'text/plain',
@@ -16,7 +19,6 @@ const ALLOWED_FILE_TYPES = [
   'text/html',
 ];
 
-// Security: URL validation
 function isValidUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -40,13 +42,49 @@ function isValidUrl(url: string): boolean {
   }
 }
 
+async function getKBEmbeddingConfig(kbId: string, userId: string): Promise<EmbeddingConfig | undefined> {
+  const { data: kb } = await supabaseAdmin
+    .from('knowledge_bases')
+    .select('embedding_provider, embedding_model, embedding_dimensions')
+    .eq('id', kbId)
+    .single();
+
+  if (!kb || kb.embedding_provider === 'xenova') {
+    return undefined;
+  }
+
+  let apiKey = '';
+  if (kb.embedding_provider === 'openai') {
+    const { data: providerData } = await supabaseAdmin
+      .from('user_providers')
+      .select('api_key_encrypted')
+      .eq('user_id', userId)
+      .eq('provider', 'openai')
+      .single();
+
+    if (providerData) {
+      try { apiKey = decrypt(providerData.api_key_encrypted); } catch {}
+    }
+  }
+
+  return {
+    provider: kb.embedding_provider as 'xenova' | 'openai',
+    model: kb.embedding_model,
+    dimensions: kb.embedding_dimensions || getEmbeddingDimensions(kb.embedding_provider as any, kb.embedding_model),
+    apiKey,
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // Authenticate user from session
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const rl = ingestLimiter.check(user.id);
+    if (!rl.success) return rateLimitResponse(rl.resetMs);
+
     const userId = user.id;
 
     const formData = await req.formData();
@@ -54,12 +92,8 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") as File;
     const knowledgeBaseId = formData.get("knowledgeBaseId") as string;
 
-    // Require a valid knowledge base ID
     if (!knowledgeBaseId) {
-      return NextResponse.json(
-        { error: "Knowledge base ID is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Knowledge base ID is required" }, { status: 400 });
     }
 
     let docs: Document[] = [];
@@ -70,13 +104,9 @@ export async function POST(req: NextRequest) {
       fileType: undefined as string | undefined,
     };
 
-    // Handle URL ingestion
     if (url) {
       if (!isValidUrl(url)) {
-        return NextResponse.json(
-          { error: "Invalid or unsafe URL" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Invalid or unsafe URL" }, { status: 400 });
       }
 
       try {
@@ -87,14 +117,9 @@ export async function POST(req: NextRequest) {
         metadata.fileType = 'url';
       } catch (error) {
         console.error("URL loading error:", error);
-        return NextResponse.json(
-          { error: "Failed to load content from URL" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Failed to load content from URL" }, { status: 400 });
       }
-    }
-    // Handle file upload
-    else if (file) {
+    } else if (file) {
       if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json(
           { error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB` },
@@ -119,10 +144,7 @@ export async function POST(req: NextRequest) {
         } else {
           const text = await file.text();
           if (text.length > 1000000) {
-            return NextResponse.json(
-              { error: "File content too large" },
-              { status: 400 }
-            );
+            return NextResponse.json({ error: "File content too large" }, { status: 400 });
           }
           docs = [new Document({
             pageContent: text,
@@ -134,30 +156,24 @@ export async function POST(req: NextRequest) {
         metadata.filePath = file.name;
       } catch (error) {
         console.error("File processing error:", error);
-        return NextResponse.json(
-          { error: "Failed to process file" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Failed to process file" }, { status: 400 });
       }
     } else {
-      return NextResponse.json(
-        { error: "No URL or file provided" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No URL or file provided" }, { status: 400 });
     }
 
     if (!docs || docs.length === 0) {
-      return NextResponse.json(
-        { error: "No content extracted from source" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No content extracted from source" }, { status: 400 });
     }
+
+    const embeddingConfig = await getKBEmbeddingConfig(knowledgeBaseId, userId);
 
     const documentId = await ragService.addDocuments(
       userId,
       knowledgeBaseId,
       docs,
-      metadata
+      metadata,
+      embeddingConfig
     );
 
     return NextResponse.json({
@@ -169,10 +185,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Ingestion error:", error);
     return NextResponse.json(
-      {
-        error: "Failed to ingest content",
-        details: error instanceof Error ? error.message : "Unknown error"
-      },
+      { error: "Failed to ingest content", code: "INTERNAL_ERROR" },
       { status: 500 }
     );
   }

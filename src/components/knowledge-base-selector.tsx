@@ -49,8 +49,8 @@ export function KnowledgeBaseSelector({ activeKbId, onSelect }: KnowledgeBaseSel
       if (!activeKbId && data.knowledgeBases?.length > 0) {
         onSelect(data.knowledgeBases[0].id);
       }
-    } catch (err) {
-      console.error("Failed to fetch knowledge bases:", err);
+    } catch {
+      // Error handled by loading state
     } finally {
       setLoading(false);
     }
@@ -72,8 +72,8 @@ export function KnowledgeBaseSelector({ activeKbId, onSelect }: KnowledgeBaseSel
       setNewName("");
       setIsCreating(false);
       setIsOpen(false);
-    } catch (err) {
-      console.error("Failed to create knowledge base:", err);
+    } catch {
+      // Silent fail
     }
   };
 
@@ -87,8 +87,8 @@ export function KnowledgeBaseSelector({ activeKbId, onSelect }: KnowledgeBaseSel
         const remaining = knowledgeBases.filter((kb) => kb.id !== id);
         onSelect(remaining.length > 0 ? remaining[0].id : "");
       }
-    } catch (err) {
-      console.error("Failed to delete knowledge base:", err);
+    } catch {
+      // Silent fail
     }
   };
 

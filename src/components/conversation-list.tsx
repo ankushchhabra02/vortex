@@ -40,25 +40,40 @@ export function ConversationList({
 }: ConversationListProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (pageNum = 1, append = false) => {
     if (!knowledgeBaseId) {
       setConversations([]);
       return;
     }
 
-    setLoading(true);
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     try {
       const res = await fetch(
-        `/api/conversations?knowledgeBaseId=${knowledgeBaseId}`
+        `/api/conversations?knowledgeBaseId=${knowledgeBaseId}&page=${pageNum}&limit=20`
       );
       if (!res.ok) return;
       const data = await res.json();
-      setConversations(data.conversations || []);
-    } catch (err) {
-      console.error("Failed to fetch conversations:", err);
+      const items = data.conversations || [];
+      if (append) {
+        setConversations((prev) => [...prev, ...items]);
+      } else {
+        setConversations(items);
+      }
+      setPage(pageNum);
+      setHasMore(pageNum * 20 < (data.total ?? 0));
+    } catch {
+      // Error handled by loading state
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [knowledgeBaseId]);
 
@@ -81,8 +96,8 @@ export function ConversationList({
       if (activeConversationId === conversationId) {
         onSelect(null);
       }
-    } catch (err) {
-      console.error("Failed to delete conversation:", err);
+    } catch {
+      // Silent fail — UI already reflects optimistic state
     }
   };
 
@@ -115,39 +130,54 @@ export function ConversationList({
             </p>
           </div>
         ) : (
-          conversations.map((conv) => (
-            <button
-              key={conv.id}
-              onClick={() => onSelect(conv.id)}
-              className={cn(
-                "w-full flex items-center justify-between p-2.5 rounded-lg text-left group transition-colors",
-                activeConversationId === conv.id
-                  ? "bg-zinc-800 border-l-2 border-blue-500"
-                  : "hover:bg-zinc-800/60 border-l-2 border-transparent"
-              )}
-            >
-              <div className="flex items-center gap-2 overflow-hidden min-w-0">
-                <MessageSquare
-                  size={14}
-                  className="text-zinc-500 shrink-0"
-                />
-                <div className="overflow-hidden min-w-0">
-                  <p className="text-sm text-zinc-300 truncate">
-                    {conv.title || "New Chat"}
-                  </p>
-                  <p className="text-[10px] text-zinc-600">
-                    {timeAgo(conv.updated_at)}
-                  </p>
-                </div>
-              </div>
+          <>
+            {conversations.map((conv) => (
               <button
-                onClick={(e) => handleDelete(e, conv.id)}
-                className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 shrink-0"
+                key={conv.id}
+                onClick={() => onSelect(conv.id)}
+                className={cn(
+                  "w-full flex items-center justify-between p-2.5 rounded-lg text-left group transition-colors",
+                  activeConversationId === conv.id
+                    ? "bg-zinc-800 border-l-2 border-blue-500"
+                    : "hover:bg-zinc-800/60 border-l-2 border-transparent"
+                )}
               >
-                <X size={14} />
+                <div className="flex items-center gap-2 overflow-hidden min-w-0">
+                  <MessageSquare
+                    size={14}
+                    className="text-zinc-500 shrink-0"
+                  />
+                  <div className="overflow-hidden min-w-0">
+                    <p className="text-sm text-zinc-300 truncate">
+                      {conv.title || "New Chat"}
+                    </p>
+                    <p className="text-[10px] text-zinc-600">
+                      {timeAgo(conv.updated_at)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => handleDelete(e, conv.id)}
+                  className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 shrink-0"
+                >
+                  <X size={14} />
+                </button>
               </button>
-            </button>
-          ))
+            ))}
+            {hasMore && (
+              <button
+                onClick={() => fetchConversations(page + 1, true)}
+                disabled={loadingMore}
+                className="w-full py-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
+              >
+                {loadingMore ? (
+                  <Loader2 size={14} className="inline animate-spin" />
+                ) : (
+                  "Load more..."
+                )}
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

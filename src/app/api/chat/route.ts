@@ -1,62 +1,123 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ragService } from "@/lib/rag-service-supabase";
-import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { createChatModel } from "@/lib/providers/llm-factory";
+import { decrypt } from "@/lib/providers/crypto";
+import type { EmbeddingConfig, LLMProvider } from "@/lib/providers/types";
+import { getEmbeddingDimensions } from "@/lib/providers/types";
+import { chatLimiter, rateLimitResponse } from "@/lib/rate-limit";
 
-// Security: Maximum message length
 const MAX_MESSAGE_LENGTH = 10000;
 const MAX_MESSAGES_HISTORY = 20;
 
+async function getUserLLMConfig(userId: string) {
+  const { data: settings } = await supabaseAdmin
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  const provider = (settings?.llm_provider || 'openrouter') as LLMProvider;
+  const model = settings?.llm_model || 'meta-llama/llama-3.2-3b-instruct:free';
+  const temperature = settings?.temperature ?? 0.7;
+
+  let apiKey = '';
+
+  if (provider === 'openrouter' && model.includes(':free')) {
+    apiKey = process.env.OPENROUTER_API_KEY || '';
+  } else {
+    const { data: providerData } = await supabaseAdmin
+      .from('user_providers')
+      .select('api_key_encrypted')
+      .eq('user_id', userId)
+      .eq('provider', provider)
+      .single();
+
+    if (providerData) {
+      try {
+        apiKey = decrypt(providerData.api_key_encrypted);
+      } catch {
+        // Fall back to env
+      }
+    }
+
+    if (!apiKey) {
+      if (provider === 'openrouter') apiKey = process.env.OPENROUTER_API_KEY || '';
+      else if (provider === 'openai') apiKey = process.env.OPENAI_API_KEY || '';
+    }
+  }
+
+  return { provider, model, temperature, apiKey };
+}
+
+async function getKBEmbeddingConfig(kbId: string, userId: string): Promise<EmbeddingConfig | undefined> {
+  const { data: kb } = await supabaseAdmin
+    .from('knowledge_bases')
+    .select('embedding_provider, embedding_model, embedding_dimensions')
+    .eq('id', kbId)
+    .single();
+
+  if (!kb || kb.embedding_provider === 'xenova') {
+    return undefined;
+  }
+
+  let apiKey = '';
+  if (kb.embedding_provider === 'openai') {
+    const { data: providerData } = await supabaseAdmin
+      .from('user_providers')
+      .select('api_key_encrypted')
+      .eq('user_id', userId)
+      .eq('provider', 'openai')
+      .single();
+
+    if (providerData) {
+      try { apiKey = decrypt(providerData.api_key_encrypted); } catch {}
+    }
+  }
+
+  return {
+    provider: kb.embedding_provider as 'xenova' | 'openai',
+    model: kb.embedding_model,
+    dimensions: kb.embedding_dimensions || getEmbeddingDimensions(kb.embedding_provider as any, kb.embedding_model),
+    apiKey,
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // Authenticate user
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rl = chatLimiter.check(user.id);
+    if (!rl.success) return rateLimitResponse(rl.resetMs);
+
     const body = await req.json();
     const { messages, knowledgeBaseId, conversationId } = body;
 
-    // Security: Validate input
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json(
-        { error: "Invalid messages format" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
     }
 
-    // Security: Limit message history
     const limitedMessages = messages.slice(-MAX_MESSAGES_HISTORY);
-
     const lastMessage = limitedMessages[limitedMessages.length - 1];
     const userQuery = lastMessage.content;
 
-    // Security: Validate message length
     if (typeof userQuery !== 'string' || userQuery.length > MAX_MESSAGE_LENGTH) {
-      return NextResponse.json(
-        { error: "Message too long" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Message too long" }, { status: 400 });
     }
 
     const sanitizedQuery = userQuery.trim();
-
     if (!sanitizedQuery) {
-      return NextResponse.json(
-        { error: "Empty message" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Empty message" }, { status: 400 });
     }
 
-    // Resolve or create conversation
     let activeConversationId = conversationId;
-    let isNewConversation = false;
 
     if (!activeConversationId && knowledgeBaseId) {
-      // Create a new conversation
       const title = sanitizedQuery.length > 50
         ? sanitizedQuery.substring(0, 50) + "..."
         : sanitizedQuery;
@@ -73,23 +134,21 @@ export async function POST(req: NextRequest) {
 
       if (!convError && conv) {
         activeConversationId = conv.id;
-        isNewConversation = true;
       }
     }
 
-    // 1. Retrieve context from RAG (if knowledge base provided)
     let context = "";
     let retrievalError = "";
     if (knowledgeBaseId) {
       try {
-        context = await ragService.getContext(sanitizedQuery, knowledgeBaseId, 5);
+        const embeddingConfig = await getKBEmbeddingConfig(knowledgeBaseId, user.id);
+        context = await ragService.getContext(sanitizedQuery, knowledgeBaseId, 5, embeddingConfig);
       } catch (error) {
         console.error("Error retrieving context:", error);
         retrievalError = "Warning: Could not retrieve knowledge base context.";
       }
     }
 
-    // 2. Prepare messages for LLM
     const systemPrompt = context
       ? `You are Vortex, a helpful AI assistant with access to a knowledge base.
 Use the following context to answer the user's question accurately. If the answer is not in the context, say so.
@@ -102,33 +161,25 @@ Answer based on the context above. Be concise and helpful.`
         ? `You are Vortex, a helpful AI assistant. ${retrievalError} Please let the user know there was an issue retrieving context and answer to the best of your ability.`
         : "You are Vortex, a helpful AI assistant. Answer questions concisely and helpfully.";
 
-    // 3. Call OpenRouter with FREE model
-    const chat = new ChatOpenAI({
-      apiKey: process.env.OPENROUTER_API_KEY,
-      configuration: {
-        baseURL: "https://openrouter.ai/api/v1",
-      },
-      modelName: "meta-llama/llama-3.2-3b-instruct:free",
-      streaming: true,
-      temperature: 0.7,
+    const llmConfig = await getUserLLMConfig(user.id);
+    const chat = createChatModel({
+      provider: llmConfig.provider,
+      apiKey: llmConfig.apiKey,
+      model: llmConfig.model,
+      temperature: llmConfig.temperature,
     });
 
-    // Convert message history
     const chatMessages = [
       new SystemMessage(systemPrompt),
       ...limitedMessages.map((m: any) => {
-        if (m.role === "user") {
-          return new HumanMessage(m.content);
-        } else if (m.role === "assistant") {
-          return new AIMessage(m.content);
-        }
+        if (m.role === "user") return new HumanMessage(m.content);
+        if (m.role === "assistant") return new AIMessage(m.content);
         return new SystemMessage(m.content);
       }),
     ];
 
     const response = await chat.stream(chatMessages);
 
-    // 4. Return stream with proper encoding
     const encoder = new TextEncoder();
     let fullAssistantResponse = "";
 
@@ -144,24 +195,18 @@ Answer based on the context above. Be concise and helpful.`
           }
           controller.close();
 
-          // Save messages to database after streaming completes
           if (activeConversationId) {
             try {
-              // Save user message
               await supabaseAdmin.from("messages").insert({
                 conversation_id: activeConversationId,
                 role: "user",
                 content: sanitizedQuery,
               });
-
-              // Save assistant response
               await supabaseAdmin.from("messages").insert({
                 conversation_id: activeConversationId,
                 role: "assistant",
                 content: fullAssistantResponse,
               });
-
-              // Update conversation timestamp
               await supabaseAdmin
                 .from("conversations")
                 .update({ updated_at: new Date().toISOString() })
@@ -189,12 +234,16 @@ Answer based on the context above. Be concise and helpful.`
     return new NextResponse(stream, { headers });
   } catch (error) {
     console.error("Chat error:", error);
+    const isProviderError = error instanceof Error &&
+      (error.message.includes('API') || error.message.includes('model') || error.message.includes('rate'));
     return NextResponse.json(
       {
-        error: "Failed to generate response",
-        details: error instanceof Error ? error.message : "Unknown error"
+        error: isProviderError
+          ? "The AI provider returned an error. Check your settings or try again."
+          : "Failed to generate response",
+        code: isProviderError ? 'PROVIDER_ERROR' : 'INTERNAL_ERROR',
       },
-      { status: 500 }
+      { status: isProviderError ? 502 : 500 }
     );
   }
 }

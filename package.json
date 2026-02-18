@@ -1,20 +1,48 @@
 {
   "name": "vortex",
   "version": "0.1.0",
+  "description": "Open-source RAG chat application with multi-provider LLM support. Chat with your documents using any LLM provider.",
+  "author": "Vortex Contributors",
+  "license": "MIT",
+  "homepage": "https://github.com/ankushchhabra02/vortex#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ankushchhabra02/vortex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ankushchhabra02/vortex/issues"
+  },
+  "keywords": [
+    "rag",
+    "retrieval-augmented-generation",
+    "chatbot",
+    "llm",
+    "openai",
+    "anthropic",
+    "supabase",
+    "pgvector",
+    "knowledge-base",
+    "nextjs",
+    "document-chat"
+  ],
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "overrides": {
     "pdf-parse": "$pdf-parse"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
+    "@langchain/anthropic": "^1.3.18",
     "@langchain/community": "^1.1.15",
     "@langchain/core": "^1.1.24",
+    "@langchain/openai": "^1.2.8",
     "@langchain/textsplitters": "^1.0.1",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/ssr": "^0.8.0",
@@ -30,6 +58,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
     "uuid": "^13.0.0"
@@ -40,9 +69,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5.1.4",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   }
 }

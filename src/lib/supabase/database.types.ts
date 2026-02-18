@@ -9,12 +9,81 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      user_settings: {
+        Row: {
+          id: string
+          user_id: string
+          llm_provider: string
+          llm_model: string
+          embedding_provider: string
+          embedding_model: string
+          temperature: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          llm_provider?: string
+          llm_model?: string
+          embedding_provider?: string
+          embedding_model?: string
+          temperature?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          llm_provider?: string
+          llm_model?: string
+          embedding_provider?: string
+          embedding_model?: string
+          temperature?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_providers: {
+        Row: {
+          id: string
+          user_id: string
+          provider: string
+          api_key_encrypted: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          provider: string
+          api_key_encrypted: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          provider?: string
+          api_key_encrypted?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       knowledge_bases: {
         Row: {
           id: string
           user_id: string
           name: string
           description: string | null
+          embedding_provider: string
+          embedding_model: string
+          embedding_dimensions: number
           created_at: string
           updated_at: string
         }
@@ -23,6 +92,9 @@ export interface Database {
           user_id: string
           name: string
           description?: string | null
+          embedding_provider?: string
+          embedding_model?: string
+          embedding_dimensions?: number
           created_at?: string
           updated_at?: string
         }
@@ -31,6 +103,9 @@ export interface Database {
           user_id?: string
           name?: string
           description?: string | null
+          embedding_provider?: string
+          embedding_model?: string
+          embedding_dimensions?: number
           created_at?: string
           updated_at?: string
         }
