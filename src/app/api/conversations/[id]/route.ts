@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { generalLimiter, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function GET(
   req: NextRequest,
@@ -10,6 +11,9 @@ export async function GET(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = generalLimiter.check(user.id);
+  if (!rl.success) return rateLimitResponse(rl.resetMs);
 
   const { id } = await params;
 
@@ -27,17 +31,44 @@ export async function GET(
     );
   }
 
-  const { data: messages, error: msgError } = await supabaseAdmin
+  const msgLimit = Math.min(100, Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") || "50", 10)));
+  const pageParam = req.nextUrl.searchParams.get("page");
+
+  const { count } = await supabaseAdmin
+    .from("messages")
+    .select("*", { count: "exact", head: true })
+    .eq("conversation_id", id);
+
+  const total = count ?? 0;
+
+  let msgQuery = supabaseAdmin
     .from("messages")
     .select("*")
     .eq("conversation_id", id)
     .order("created_at", { ascending: true });
 
-  if (msgError) {
-    return NextResponse.json({ error: msgError.message }, { status: 500 });
+  if (pageParam) {
+    const page = Math.max(1, parseInt(pageParam, 10));
+    const offset = (page - 1) * msgLimit;
+    msgQuery = msgQuery.range(offset, offset + msgLimit - 1);
+
+    const { data: messages, error: msgError } = await msgQuery;
+    if (msgError) {
+      return NextResponse.json({ error: "Failed to fetch messages", code: "INTERNAL_ERROR" }, { status: 500 });
+    }
+    return NextResponse.json({ conversation, messages: messages || [], total, page, limit: msgLimit });
   }
 
-  return NextResponse.json({ conversation, messages: messages || [] });
+  // Default: return the most recent messages (backward compatible)
+  const offset = Math.max(0, total - msgLimit);
+  msgQuery = msgQuery.range(offset, offset + msgLimit - 1);
+
+  const { data: messages, error: msgError } = await msgQuery;
+  if (msgError) {
+    return NextResponse.json({ error: "Failed to fetch messages", code: "INTERNAL_ERROR" }, { status: 500 });
+  }
+
+  return NextResponse.json({ conversation, messages: messages || [], total });
 }
 
 export async function PATCH(
@@ -48,6 +79,9 @@ export async function PATCH(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = generalLimiter.check(user.id);
+  if (!rl.success) return rateLimitResponse(rl.resetMs);
 
   const { id } = await params;
   const body = await req.json();
@@ -60,7 +94,7 @@ export async function PATCH(
     .eq("user_id", user.id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to update conversation", code: "INTERNAL_ERROR" }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });
@@ -74,6 +108,9 @@ export async function DELETE(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = generalLimiter.check(user.id);
+  if (!rl.success) return rateLimitResponse(rl.resetMs);
 
   const { id } = await params;
 
@@ -102,7 +139,7 @@ export async function DELETE(
     .eq("id", id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to delete conversation", code: "INTERNAL_ERROR" }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

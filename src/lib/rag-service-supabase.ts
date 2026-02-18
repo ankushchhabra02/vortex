@@ -1,5 +1,7 @@
 import { supabaseAdmin } from './supabase/server';
 import { generateEmbedding } from './embeddings';
+import { generateEmbeddingWithConfig } from './providers/embedding-factory';
+import type { EmbeddingConfig } from './providers/types';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 
 interface Document {
@@ -7,10 +9,6 @@ interface Document {
   metadata?: Record<string, any>;
 }
 
-/**
- * RAG Service using Supabase pgvector
- * Completely FREE - no API costs
- */
 export class RAGService {
   private textSplitter: RecursiveCharacterTextSplitter;
 
@@ -21,13 +19,6 @@ export class RAGService {
     });
   }
 
-  /**
-   * Add documents to a knowledge base with embeddings
-   * @param userId - User ID who owns the knowledge base
-   * @param knowledgeBaseId - Knowledge base ID
-   * @param documents - Documents to add
-   * @param metadata - Optional metadata (source URL, file path, etc.)
-   */
   async addDocuments(
     userId: string,
     knowledgeBaseId: string,
@@ -37,10 +28,10 @@ export class RAGService {
       sourceUrl?: string;
       filePath?: string;
       fileType?: string;
-    }
+    },
+    embeddingConfig?: EmbeddingConfig
   ): Promise<string> {
     try {
-      // 1. Create document record
       const { data: doc, error: docError } = await supabaseAdmin
         .from('documents')
         .insert({
@@ -59,20 +50,21 @@ export class RAGService {
         throw new Error('Failed to create document');
       }
 
-      // 2. Split documents into chunks
       const allChunks: string[] = [];
       for (const document of documents) {
         const chunks = await this.textSplitter.splitText(document.pageContent);
         allChunks.push(...chunks);
       }
 
-      // 3. Generate embeddings for all chunks (FREE using Transformers.js)
       console.log(`Generating embeddings for ${allChunks.length} chunks...`);
       const embeddings = await Promise.all(
-        allChunks.map((chunk) => generateEmbedding(chunk))
+        allChunks.map((chunk) =>
+          embeddingConfig
+            ? generateEmbeddingWithConfig(chunk, embeddingConfig)
+            : generateEmbedding(chunk)
+        )
       );
 
-      // 4. Insert chunks with embeddings into database
       const chunkRecords = allChunks.map((chunk, index) => ({
         document_id: doc.id,
         chunk_text: chunk,
@@ -97,19 +89,12 @@ export class RAGService {
     }
   }
 
-  /**
-   * Search for relevant document chunks using vector similarity
-   * @param query - User's query text
-   * @param knowledgeBaseId - Optional: limit search to specific knowledge base
-   * @param matchThreshold - Minimum similarity score (0-1)
-   * @param matchCount - Number of results to return
-   * @returns Relevant document chunks with similarity scores
-   */
   async similaritySearch(
     query: string,
     knowledgeBaseId?: string,
     matchThreshold: number = 0.5,
-    matchCount: number = 5
+    matchCount: number = 5,
+    embeddingConfig?: EmbeddingConfig
   ): Promise<
     Array<{
       id: string;
@@ -119,10 +104,10 @@ export class RAGService {
     }>
   > {
     try {
-      // 1. Generate embedding for the query (FREE)
-      const queryEmbedding = await generateEmbedding(query);
+      const queryEmbedding = embeddingConfig
+        ? await generateEmbeddingWithConfig(query, embeddingConfig)
+        : await generateEmbedding(query);
 
-      // 2. Call Supabase function for vector similarity search
       const { data, error } = await supabaseAdmin.rpc('match_document_chunks', {
         query_embedding: queryEmbedding,
         match_threshold: matchThreshold,
@@ -142,30 +127,24 @@ export class RAGService {
     }
   }
 
-  /**
-   * Get context for RAG by combining relevant chunks
-   * @param query - User's query
-   * @param knowledgeBaseId - Optional: limit to specific KB
-   * @param maxChunks - Maximum number of chunks to include
-   * @returns Combined context string
-   */
   async getContext(
     query: string,
     knowledgeBaseId?: string,
-    maxChunks: number = 5
+    maxChunks: number = 5,
+    embeddingConfig?: EmbeddingConfig
   ): Promise<string> {
     const results = await this.similaritySearch(
       query,
       knowledgeBaseId,
       0.5,
-      maxChunks
+      maxChunks,
+      embeddingConfig
     );
 
     if (results.length === 0) {
       return '';
     }
 
-    // Combine chunks with separators
     const context = results
       .map((result, index) => {
         return `[Source ${index + 1}] (Similarity: ${result.similarity.toFixed(2)})\n${result.chunk_text}`;
@@ -175,17 +154,13 @@ export class RAGService {
     return context;
   }
 
-  /**
-   * Create a new knowledge base for a user
-   * @param userId - User ID
-   * @param name - Knowledge base name
-   * @param description - Optional description
-   * @returns Knowledge base ID
-   */
   async createKnowledgeBase(
     userId: string,
     name: string,
-    description?: string
+    description?: string,
+    embeddingProvider?: string,
+    embeddingModel?: string,
+    embeddingDimensions?: number
   ): Promise<string> {
     const { data, error } = await supabaseAdmin
       .from('knowledge_bases')
@@ -193,6 +168,9 @@ export class RAGService {
         user_id: userId,
         name,
         description,
+        embedding_provider: embeddingProvider || 'xenova',
+        embedding_model: embeddingModel || 'Xenova/all-MiniLM-L6-v2',
+        embedding_dimensions: embeddingDimensions || 384,
       })
       .select()
       .single();
@@ -205,11 +183,6 @@ export class RAGService {
     return data.id;
   }
 
-  /**
-   * Get all knowledge bases for a user
-   * @param userId - User ID
-   * @returns Array of knowledge bases
-   */
   async getKnowledgeBases(userId: string) {
     const { data, error } = await supabaseAdmin
       .from('knowledge_bases')
@@ -225,11 +198,6 @@ export class RAGService {
     return data || [];
   }
 
-  /**
-   * Get all documents in a knowledge base
-   * @param knowledgeBaseId - Knowledge base ID
-   * @returns Array of documents
-   */
   async getDocuments(knowledgeBaseId: string) {
     const { data, error } = await supabaseAdmin
       .from('documents')
@@ -245,10 +213,6 @@ export class RAGService {
     return data || [];
   }
 
-  /**
-   * Delete a document and all its chunks
-   * @param documentId - Document ID to delete
-   */
   async deleteDocument(documentId: string) {
     const { error } = await supabaseAdmin
       .from('documents')
@@ -262,5 +226,4 @@ export class RAGService {
   }
 }
 
-// Export singleton instance
 export const ragService = new RAGService();

@@ -49,6 +49,9 @@ export function IngestPanel({
   const [isIngesting, setIsIngesting] = useState(false);
   const [items, setItems] = useState<DocumentItem[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [docPage, setDocPage] = useState(1);
+  const [hasMoreDocs, setHasMoreDocs] = useState(false);
+  const [loadingMoreDocs, setLoadingMoreDocs] = useState(false);
   const [activeTab, setActiveTab] = useState<SidebarTab>("chats");
   const router = useRouter();
   const { toast } = useToast();
@@ -62,23 +65,33 @@ export function IngestPanel({
     fetchDocuments(knowledgeBaseId);
   }, [knowledgeBaseId]);
 
-  const fetchDocuments = async (kbId: string) => {
-    setLoadingDocs(true);
+  const fetchDocuments = async (kbId: string, pageNum = 1, append = false) => {
+    if (append) {
+      setLoadingMoreDocs(true);
+    } else {
+      setLoadingDocs(true);
+    }
     try {
-      const res = await fetch(`/api/knowledge-bases/${kbId}/documents`);
+      const res = await fetch(`/api/knowledge-bases/${kbId}/documents?page=${pageNum}&limit=20`);
       if (!res.ok) return;
       const data = await res.json();
-      setItems(
-        (data.documents || []).map((doc: any) => ({
-          type: doc.source_url ? "url" : "file",
-          name: doc.title || doc.file_path || "Untitled",
-          id: doc.id,
-        }))
-      );
-    } catch (err) {
-      console.error("Failed to fetch documents:", err);
+      const mapped = (data.documents || []).map((doc: any) => ({
+        type: doc.source_url ? "url" : "file",
+        name: doc.title || doc.file_path || "Untitled",
+        id: doc.id,
+      }));
+      if (append) {
+        setItems((prev) => [...prev, ...mapped]);
+      } else {
+        setItems(mapped);
+      }
+      setDocPage(pageNum);
+      setHasMoreDocs(pageNum * 20 < (data.total ?? 0));
+    } catch {
+      // Error handled by loading state
     } finally {
       setLoadingDocs(false);
+      setLoadingMoreDocs(false);
     }
   };
 
@@ -110,7 +123,6 @@ export function IngestPanel({
       setUrl("");
       toast("URL ingested successfully", "success");
     } catch (error: any) {
-      console.error(error);
       toast(error.message || "Failed to ingest URL", "error");
     } finally {
       setIsIngesting(false);
@@ -145,7 +157,6 @@ export function IngestPanel({
       e.target.value = "";
       toast("File uploaded successfully", "success");
     } catch (error: any) {
-      console.error(error);
       toast(error.message || "Failed to upload file", "error");
     } finally {
       setIsIngesting(false);
@@ -160,8 +171,7 @@ export function IngestPanel({
       if (!res.ok) throw new Error("Failed to delete");
       setItems((prev) => prev.filter((i) => i.id !== documentId));
       toast("Document deleted", "info");
-    } catch (error) {
-      console.error("Failed to delete document:", error);
+    } catch {
       toast("Failed to delete document", "error");
     }
   };
@@ -319,35 +329,50 @@ export function IngestPanel({
                       </p>
                     </div>
                   ) : (
-                    items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-800 group"
-                      >
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          {item.type === "url" ? (
-                            <LinkIcon
-                              size={14}
-                              className="text-blue-400 flex-shrink-0"
-                            />
-                          ) : (
-                            <FileText
-                              size={14}
-                              className="text-orange-400 flex-shrink-0"
-                            />
-                          )}
-                          <span className="text-xs text-zinc-300 truncate">
-                            {item.name}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => handleDeleteDocument(item.id)}
-                          className="text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                    <>
+                      {items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-800 group"
                         >
-                          <X size={14} />
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            {item.type === "url" ? (
+                              <LinkIcon
+                                size={14}
+                                className="text-blue-400 flex-shrink-0"
+                              />
+                            ) : (
+                              <FileText
+                                size={14}
+                                className="text-orange-400 flex-shrink-0"
+                              />
+                            )}
+                            <span className="text-xs text-zinc-300 truncate">
+                              {item.name}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteDocument(item.id)}
+                            className="text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                      {hasMoreDocs && knowledgeBaseId && (
+                        <button
+                          onClick={() => fetchDocuments(knowledgeBaseId, docPage + 1, true)}
+                          disabled={loadingMoreDocs}
+                          className="w-full py-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
+                        >
+                          {loadingMoreDocs ? (
+                            <Loader2 size={14} className="inline animate-spin" />
+                          ) : (
+                            "Load more..."
+                          )}
                         </button>
-                      </div>
-                    ))
+                      )}
+                    </>
                   )}
                 </div>
               </>
