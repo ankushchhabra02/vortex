@@ -1,11 +1,21 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 import { Database } from './database.types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+let _supabase: ReturnType<typeof createBrowserClient<Database>> | null = null;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+export function createClient() {
+  return createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+// Lazy singleton - only created when first accessed (not during SSR/build)
+export const supabase = new Proxy({} as ReturnType<typeof createBrowserClient<Database>>, {
+  get(_target, prop) {
+    if (!_supabase) {
+      _supabase = createClient();
+    }
+    return (_supabase as any)[prop];
+  },
+});
