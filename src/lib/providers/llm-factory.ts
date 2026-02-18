@@ -47,6 +47,22 @@ export function createChatModel(config: ProviderConfig) {
         },
       });
 
+    case 'google': {
+      // Using OpenAI compatibility layer for Gemini if possible, 
+      // otherwise we would need @langchain/google-genai
+      // Google's newest models support OpenAI format via a proxy or specific headers
+      // For now, let's use the OpenAI-compatible endpoint if available or throw clear error
+      return new ChatOpenAI({
+        apiKey,
+        modelName: model,
+        streaming: true,
+        temperature,
+        configuration: {
+          baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+        },
+      });
+    }
+
     default:
       throw new Error(`Unsupported LLM provider: ${provider}`);
   }

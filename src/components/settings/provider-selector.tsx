@@ -147,9 +147,8 @@ function OpenRouterModelPicker({
                 <button
                   key={m.id}
                   onClick={() => handleSelect(m)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-zinc-700/50 transition-colors ${
-                    m.id === model ? "bg-blue-600/10 border-l-2 border-blue-500" : "border-l-2 border-transparent"
-                  }`}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-zinc-700/50 transition-colors ${m.id === model ? "bg-blue-600/10 border-l-2 border-blue-500" : "border-l-2 border-transparent"
+                    }`}
                 >
                   <div className="min-w-0">
                     <div className="text-sm text-zinc-200 truncate">{m.name}</div>
@@ -194,7 +193,9 @@ export function ProviderSelector({
 }: ProviderSelectorProps) {
   const handleProviderChange = (newProvider: string) => {
     onProviderChange(newProvider);
-    if (newProvider !== "openrouter") {
+    if (newProvider === "openrouter") {
+      onModelChange("openrouter/auto");
+    } else {
       const models = LLM_PROVIDERS[newProvider as LLMProvider]?.models;
       if (models?.length) {
         onModelChange(models[0].id);
@@ -214,16 +215,15 @@ export function ProviderSelector({
         <div className="grid grid-cols-2 gap-2">
           {Object.entries(LLM_PROVIDERS).map(([key, info]) => {
             const isActive = provider === key;
-            const hasKey = configuredProviders.includes(key) || key === 'openrouter';
+            const hasKey = configuredProviders.includes(key);
             return (
               <button
                 key={key}
                 onClick={() => handleProviderChange(key)}
-                className={`flex items-center justify-between px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
-                  isActive
+                className={`flex items-center justify-between px-4 py-3 rounded-lg border text-sm font-medium transition-all ${isActive
                     ? "bg-blue-600/10 border-blue-500 text-blue-400"
                     : "bg-zinc-800/50 border-zinc-700 text-zinc-300 hover:border-zinc-600"
-                }`}
+                  }`}
               >
                 <span>{info.name}</span>
                 {!info.requiresKey && (

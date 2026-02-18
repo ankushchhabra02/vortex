@@ -1,8 +1,15 @@
-import { pipeline, env } from '@xenova/transformers';
+// Lazy load transformers to avoid crashing on Vercel when native libraries are missing
+let transformers: any = null;
 
-// Configure transformers.js
-env.allowLocalModels = false;
-env.useBrowserCache = false;
+async function loadTransformers() {
+  if (!transformers) {
+    transformers = await import('@xenova/transformers');
+    // Configure transformers.js
+    transformers.env.allowLocalModels = false;
+    transformers.env.useBrowserCache = false;
+  }
+  return transformers;
+}
 
 let embedder: unknown = null;
 
@@ -13,6 +20,7 @@ let embedder: unknown = null;
  */
 async function getEmbedder() {
   if (!embedder) {
+    const { pipeline } = await loadTransformers();
     embedder = await pipeline(
       'feature-extraction',
       'Xenova/all-MiniLM-L6-v2'

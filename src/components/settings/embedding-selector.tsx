@@ -37,12 +37,15 @@ export function EmbeddingSelector({
           {Object.entries(EMBEDDING_PROVIDERS).map(([key, info]) => (
             <button
               key={key}
-              onClick={() => handleProviderChange(key)}
-              className={`px-4 py-3 rounded-lg border text-sm font-medium transition-all text-left ${
-                provider === key
-                  ? "bg-blue-600/10 border-blue-500 text-blue-400"
-                  : "bg-zinc-800/50 border-zinc-700 text-zinc-300 hover:border-zinc-600"
-              }`}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                handleProviderChange(key);
+              }}
+              className={`px-4 py-3 rounded-lg border text-sm font-medium transition-all text-left ${provider === key
+                ? "bg-blue-600/10 border-blue-500 text-blue-400"
+                : "bg-zinc-800/50 border-zinc-700 text-zinc-300 hover:border-zinc-600"
+                }`}
             >
               <div>{info.name}</div>
               {!info.requiresKey && (
@@ -79,7 +82,7 @@ export function EmbeddingSelector({
             </div>
             <div>
               <span className="text-zinc-500">Cost:</span>{" "}
-              {currentModel.free ? "Free (runs locally)" : "API costs apply"}
+              {provider === 'xenova' ? "Free (runs locally)" : currentModel.free ? "Free Tier" : "API costs apply"}
             </div>
           </div>
         </div>

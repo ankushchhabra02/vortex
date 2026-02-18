@@ -89,8 +89,10 @@ export default function SettingsPage() {
   }, []);
 
   const updateSettings = (key: keyof Settings, value: string | number | boolean) => {
-    if (!settings) return;
-    setSettings({ ...settings, [key]: value });
+    setSettings((prev) => {
+      if (!prev) return prev;
+      return { ...prev, [key]: value };
+    });
     setDirty(true);
   };
 

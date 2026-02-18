@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Provider and API key are required' }, { status: 400 });
     }
 
-    const validProviders = ['openai', 'anthropic', 'openrouter', 'xai'];
+    const validProviders = ['openai', 'anthropic', 'openrouter', 'xai', 'google'];
     if (!validProviders.includes(provider)) {
       return NextResponse.json({ error: 'Invalid provider' }, { status: 400 });
     }

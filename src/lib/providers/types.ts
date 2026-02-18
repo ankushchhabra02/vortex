@@ -1,5 +1,5 @@
-export type LLMProvider = 'openai' | 'anthropic' | 'openrouter' | 'xai';
-export type EmbeddingProvider = 'xenova' | 'openai';
+export type LLMProvider = 'openai' | 'anthropic' | 'openrouter' | 'xai' | 'google';
+export type EmbeddingProvider = 'xenova' | 'openai' | 'google' | 'openrouter';
 
 export interface ProviderConfig {
   provider: LLMProvider;
@@ -51,6 +51,7 @@ export const LLM_PROVIDERS: Record<LLMProvider, LLMProviderInfo> = {
       { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Llama 3.2 3B (Free)', free: true },
       { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B (Free)', free: true },
       { id: 'google/gemma-2-9b-it:free', name: 'Gemma 2 9B (Free)', free: true },
+      { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash (Free)', free: true },
       { id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B (Free)', free: true },
       { id: 'qwen/qwen-2.5-7b-instruct:free', name: 'Qwen 2.5 7B (Free)', free: true },
       { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini' },
@@ -87,6 +88,15 @@ export const LLM_PROVIDERS: Record<LLMProvider, LLMProviderInfo> = {
       { id: 'grok-2-mini', name: 'Grok 2 Mini' },
     ],
   },
+  google: {
+    name: 'Google Gemini',
+    requiresKey: true,
+    models: [
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Fast & Free)', free: true },
+      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Powerful)', free: true },
+      { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Experimental)', free: true },
+    ],
+  },
 };
 
 export const EMBEDDING_PROVIDERS: Record<EmbeddingProvider, EmbeddingProviderInfo> = {
@@ -103,6 +113,21 @@ export const EMBEDDING_PROVIDERS: Record<EmbeddingProvider, EmbeddingProviderInf
     models: [
       { id: 'text-embedding-3-small', name: 'text-embedding-3-small', dimensions: 1536 },
       { id: 'text-embedding-3-large', name: 'text-embedding-3-large', dimensions: 3072 },
+    ],
+  },
+  google: {
+    name: 'Google Gemini',
+    requiresKey: true,
+    models: [
+      { id: 'text-embedding-004', name: 'Gemini Embedding (Free Tier)', dimensions: 768, free: true },
+    ],
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    requiresKey: true,
+    models: [
+      { id: 'openai/text-embedding-3-small', name: 'OpenAI: Text Embedding 3 Small', dimensions: 1536 },
+      { id: 'openai/text-embedding-3-large', name: 'OpenAI: Text Embedding 3 Large', dimensions: 3072 },
     ],
   },
 };

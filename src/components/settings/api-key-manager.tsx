@@ -31,25 +31,25 @@ export function APIKeyManager({
   const [verifyResult, setVerifyResult] = useState<Record<string, { valid: boolean; message: string }>>({});
 
   const allProviders = Object.entries(LLM_PROVIDERS)
-    .filter(([key]) => key !== 'openrouter') // OpenRouter has optional key, but free models work without
     .map(([key, info]) => {
       const existing = providers.find((p) => p.provider === key);
+      let displayName = info.name;
+      if (key === 'openrouter') displayName = "OpenRouter (Required for some LLMs)";
+      if (key === 'google') displayName = "Google Gemini (Free tier available)";
+
       return {
         key,
-        name: info.name,
+        name: displayName,
         has_key: existing?.has_key || false,
         key_hint: existing?.key_hint || '',
       };
+    })
+    .sort((a, b) => {
+      // Keep OpenRouter at top
+      if (a.key === 'openrouter') return -1;
+      if (b.key === 'openrouter') return 1;
+      return a.name.localeCompare(b.name);
     });
-
-  // Also add OpenRouter as optional
-  const orProvider = providers.find((p) => p.provider === 'openrouter');
-  allProviders.unshift({
-    key: 'openrouter',
-    name: 'OpenRouter (Optional)',
-    has_key: orProvider?.has_key || false,
-    key_hint: orProvider?.key_hint || '',
-  });
 
   const handleSave = async (provider: string) => {
     if (!keyInput.trim()) return;
@@ -122,8 +122,8 @@ export function APIKeyManager({
           {verifyResult[p.key] && (
             <div
               className={`text-xs px-3 py-1.5 rounded mb-2 ${verifyResult[p.key].valid
-                  ? "bg-green-900/20 text-green-400 border border-green-800/30"
-                  : "bg-red-900/20 text-red-400 border border-red-800/30"
+                ? "bg-green-900/20 text-green-400 border border-green-800/30"
+                : "bg-red-900/20 text-red-400 border border-red-800/30"
                 }`}
             >
               {verifyResult[p.key].valid ? (
