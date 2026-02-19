@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Menu, X, Loader2, Save } from "lucide-react";
+import { Menu, X, Loader2, Save, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
@@ -195,20 +195,31 @@ export default function SettingsPage() {
             </button>
             <h2 className="text-lg font-semibold text-zinc-100">Settings</h2>
           </div>
-          {dirty && (
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+          <div className="flex items-center gap-2">
+            <a
+              href="https://github.com/ankushchhabra02/vortex"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors border border-transparent hover:border-zinc-700 mr-2"
             >
-              {saving ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Save size={14} />
-              )}
-              Save Changes
-            </button>
-          )}
+              <Github size={18} />
+              <span className="text-sm font-medium hidden sm:inline">GitHub</span>
+            </a>
+            {dirty && (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Save size={14} />
+                )}
+                Save Changes
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto">

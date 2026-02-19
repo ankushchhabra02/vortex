@@ -5,7 +5,9 @@
 
 <p align="center">
   <a href="https://github.com/ankushchhabra02/vortex/actions/workflows/ci.yml"><img src="https://github.com/ankushchhabra02/vortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/github/stars/ankushchhabra02/vortex" alt="Stars">
+  <img src="https://img.shields.io/github/license/ankushchhabra02/vortex" alt="License">
+  <img src="https://img.shields.io/badge/deploy-vercel-blue" alt="Deploy">
   <a href="https://github.com/ankushchhabra02/vortex/issues"><img src="https://img.shields.io/github/issues/ankushchhabra02/vortex" alt="Issues"></a>
 </p>
 
@@ -33,6 +35,15 @@ Vortex is a self-hosted RAG (Retrieval-Augmented Generation) application that le
 - **Settings Page** — Configure LLM provider, model, temperature, API keys, and default embedding model. API keys are encrypted at rest with AES-256-GCM.
 - **Authentication** — Email/password auth via Supabase with server-side session checks. All data is isolated per user with Row Level Security.
 - **Responsive Design** — Works on desktop and mobile with collapsible sidebar navigation.
+- **GitHub Integration** — Direct link to the source repository from the header.
+
+## Preview
+
+### Dashboard
+![Dashboard](/public/screenshots/dashboard.png)
+
+### Chat Interface
+![Chat Interface](/public/screenshots/chat.png)
 
 ## Quick Start
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Menu, X, Plus, Loader2 } from "lucide-react";
+import { Menu, X, Plus, Loader2, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
@@ -148,6 +148,15 @@ export default function DashboardPage() {
             </button>
             <h2 className="text-lg font-semibold text-zinc-100">Dashboard</h2>
           </div>
+          <a
+            href="https://github.com/ankushchhabra02/vortex"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors border border-transparent hover:border-zinc-700"
+          >
+            <Github size={18} />
+            <span className="text-sm font-medium hidden sm:inline">GitHub</span>
+          </a>
         </header>
 
         <div className="flex-1 overflow-y-auto">

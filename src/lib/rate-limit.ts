@@ -84,7 +84,7 @@ export function rateLimitResponse(resetMs: number): NextResponse {
 
 // Pre-configured limiters
 export const chatLimiter = rateLimit({ interval: 60_000, maxRequests: 20 });
-export const ingestLimiter = rateLimit({ interval: 60_000, maxRequests: 10 });
+export const ingestLimiter = rateLimit({ interval: 60_000, maxRequests: 30 }); // Increased from 10
 export const modelsLimiter = rateLimit({ interval: 60_000, maxRequests: 30 });
-export const verifyLimiter = rateLimit({ interval: 60_000, maxRequests: 5 });
+export const verifyLimiter = rateLimit({ interval: 60_000, maxRequests: 20 }); // Increased from 5
 export const generalLimiter = rateLimit({ interval: 60_000, maxRequests: 60 });
