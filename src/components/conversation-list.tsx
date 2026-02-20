@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Plus, X, MessageSquare, Loader2 } from "lucide-react";
+import { ConversationListSkeleton } from "@/components/skeleton-loader";
 import { cn, timeAgo } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useToast } from "@/components/toast";
@@ -105,9 +106,7 @@ export function ConversationList({
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 size={20} className="text-zinc-500 animate-spin" />
-          </div>
+          <ConversationListSkeleton count={4} />
         ) : conversations.length === 0 ? (
           <div className="p-4 text-center">
             <MessageSquare size={32} className="text-zinc-700 mx-auto mb-2" />

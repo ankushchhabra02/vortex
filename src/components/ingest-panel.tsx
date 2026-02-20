@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DocumentListSkeleton } from "@/components/skeleton-loader";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { KnowledgeBaseSelector } from "./knowledge-base-selector";
@@ -320,12 +321,7 @@ export function IngestPanel({
                 {/* Documents List */}
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
                   {loadingDocs ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2
-                        size={20}
-                        className="text-zinc-500 animate-spin"
-                      />
-                    </div>
+                    <DocumentListSkeleton count={4} />
                   ) : items.length === 0 ? (
                     <div className="p-4 text-center">
                       <p className="text-xs text-zinc-500">
