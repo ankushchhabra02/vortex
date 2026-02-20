@@ -59,3 +59,22 @@ export function ConversationListSkeleton({ count = 5 }: { count?: number }) {
     </div>
   );
 }
+
+export function DocumentSkeleton() {
+  return (
+    <div className="p-2 flex items-center gap-2">
+      <Skeleton className="h-3.5 w-3.5 rounded shrink-0" />
+      <Skeleton className="h-3 w-3/4" />
+    </div>
+  );
+}
+
+export function DocumentListSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className="space-y-1">
+      {Array.from({ length: count }).map((_, i) => (
+        <DocumentSkeleton key={i} />
+      ))}
+    </div>
+  );
+}

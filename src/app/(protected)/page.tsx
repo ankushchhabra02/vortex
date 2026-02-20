@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Menu, X, Plus, Loader2, Github } from "lucide-react";
+import { Menu, X, Plus, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { KBCard } from "@/components/dashboard/kb-card";
 import { RecentChats } from "@/components/dashboard/recent-chats";
 import { CreateKBDialog } from "@/components/dashboard/create-kb-dialog";
+import { KBGridSkeleton, ConversationListSkeleton } from "@/components/skeleton-loader";
 import { useToast } from "@/components/toast";
 
 interface KnowledgeBase {
@@ -162,9 +163,24 @@ export default function DashboardPage() {
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
             {loading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 size={24} className="text-zinc-500 animate-spin" />
-              </div>
+              <>
+                <div className="mb-10">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-lg font-semibold text-zinc-200">
+                      Your Knowledge Bases
+                    </h3>
+                  </div>
+                  <KBGridSkeleton count={3} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-zinc-200 mb-4">
+                    Recent Conversations
+                  </h3>
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                    <ConversationListSkeleton count={3} />
+                  </div>
+                </div>
+              </>
             ) : (
               <>
                 {/* KB Section */}
