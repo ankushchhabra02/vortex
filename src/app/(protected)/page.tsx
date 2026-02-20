@@ -64,11 +64,11 @@ export default function DashboardPage() {
         setRecentConversations(data.conversations || []);
       }
     } catch {
-      // Error handled by loading state
+      toast("Failed to load dashboard data", "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     fetchData();

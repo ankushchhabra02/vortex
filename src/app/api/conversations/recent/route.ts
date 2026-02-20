@@ -17,6 +17,7 @@ export async function GET() {
       .from('conversations')
       .select('id, title, knowledge_base_id, updated_at, knowledge_bases(name)')
       .eq('user_id', user.id)
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false })
       .limit(5);
 

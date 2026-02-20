@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Plus, ChevronDown, Trash2, Database, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/toast";
 
 interface KnowledgeBase {
   id: string;
@@ -23,6 +24,7 @@ export function KnowledgeBaseSelector({ activeKbId, onSelect }: KnowledgeBaseSel
   const [newName, setNewName] = useState("");
   const [loading, setLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const fetchKnowledgeBases = useCallback(async () => {
     try {
@@ -34,11 +36,11 @@ export function KnowledgeBaseSelector({ activeKbId, onSelect }: KnowledgeBaseSel
         onSelect(data.knowledgeBases[0].id);
       }
     } catch {
-      // Error handled by loading state
+      toast("Failed to load knowledge bases", "error");
     } finally {
       setLoading(false);
     }
-  }, [activeKbId, onSelect]);
+  }, [activeKbId, onSelect, toast]);
 
   useEffect(() => {
     fetchKnowledgeBases();
@@ -73,7 +75,7 @@ export function KnowledgeBaseSelector({ activeKbId, onSelect }: KnowledgeBaseSel
       setIsCreating(false);
       setIsOpen(false);
     } catch {
-      // Silent fail
+      toast("Failed to create knowledge base", "error");
     }
   };
 
@@ -88,7 +90,7 @@ export function KnowledgeBaseSelector({ activeKbId, onSelect }: KnowledgeBaseSel
         onSelect(remaining.length > 0 ? remaining[0].id : "");
       }
     } catch {
-      // Silent fail
+      toast("Failed to delete knowledge base", "error");
     }
   };
 

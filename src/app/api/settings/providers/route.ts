@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/supabase/auth';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { encrypt, decrypt } from '@/lib/providers/crypto';
 import { generalLimiter, rateLimitResponse } from '@/lib/rate-limit';
+import { validateBody, providerSaveSchema, providerDeleteSchema } from '@/lib/validations';
 
 export async function GET() {
   const user = await getAuthUser();
@@ -24,8 +25,8 @@ export async function GET() {
       try {
         const key = decrypt(p.api_key_encrypted);
         lastFour = key.slice(-4);
-      } catch {
-        // decryption failed
+      } catch (e) {
+        console.error('[providers] Decrypt error:', e);
       }
       return {
         id: p.id,
@@ -54,16 +55,12 @@ export async function POST(req: NextRequest) {
   if (!rl.success) return rateLimitResponse(rl.resetMs);
 
   try {
-    const { provider, api_key } = await req.json();
-
-    if (!provider || !api_key) {
-      return NextResponse.json({ error: 'Provider and API key are required' }, { status: 400 });
+    const body = await req.json();
+    const validation = validateBody(providerSaveSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
-
-    const validProviders = ['openai', 'anthropic', 'openrouter', 'xai', 'google'];
-    if (!validProviders.includes(provider)) {
-      return NextResponse.json({ error: 'Invalid provider' }, { status: 400 });
-    }
+    const { provider, api_key } = validation.data;
 
     const encrypted = encrypt(api_key);
 
@@ -101,11 +98,12 @@ export async function DELETE(req: NextRequest) {
   if (!rl.success) return rateLimitResponse(rl.resetMs);
 
   try {
-    const { provider } = await req.json();
-
-    if (!provider) {
-      return NextResponse.json({ error: 'Provider is required' }, { status: 400 });
+    const body = await req.json();
+    const validation = validateBody(providerDeleteSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
+    const { provider } = validation.data;
 
     await supabaseAdmin
       .from('user_providers')

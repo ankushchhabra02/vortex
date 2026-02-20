@@ -12,6 +12,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { KnowledgeBaseSelector } from "./knowledge-base-selector";
@@ -53,6 +54,7 @@ export function IngestPanel({
   const [hasMoreDocs, setHasMoreDocs] = useState(false);
   const [loadingMoreDocs, setLoadingMoreDocs] = useState(false);
   const [activeTab, setActiveTab] = useState<SidebarTab>("chats");
+  const [deleteDocTarget, setDeleteDocTarget] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -354,7 +356,7 @@ export function IngestPanel({
                             </span>
                           </div>
                           <button
-                            onClick={() => handleDeleteDocument(item.id)}
+                            onClick={() => setDeleteDocTarget(item.id)}
                             className="text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
                           >
                             <X size={14} />
@@ -409,6 +411,16 @@ export function IngestPanel({
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteDocTarget !== null}
+        title="Delete Document"
+        message="This will permanently delete this document and its indexed content. This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => { if (deleteDocTarget) handleDeleteDocument(deleteDocTarget); setDeleteDocTarget(null); }}
+        onCancel={() => setDeleteDocTarget(null)}
+      />
     </div>
   );
 }

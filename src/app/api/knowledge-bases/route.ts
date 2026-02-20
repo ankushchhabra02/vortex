@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { getEmbeddingDimensions } from "@/lib/providers/types";
 import type { EmbeddingProvider } from "@/lib/providers/types";
 import { generalLimiter, rateLimitResponse } from "@/lib/rate-limit";
+import { validateBody, kbCreateSchema } from "@/lib/validations";
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
@@ -22,12 +23,14 @@ export async function GET(req: NextRequest) {
     const { count } = await supabaseAdmin
       .from('knowledge_bases')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .is('deleted_at', null);
 
     const { data: knowledgeBases, error } = await supabaseAdmin
       .from('knowledge_bases')
       .select('*, documents(count), conversations(count)')
       .eq('user_id', user.id)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -52,7 +55,8 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ knowledgeBases: formatted, total: count ?? 0, page, limit });
-  } catch {
+  } catch (error) {
+    console.error('[knowledge-bases] Fetch error:', error);
     return NextResponse.json({ error: "Failed to fetch knowledge bases" }, { status: 500 });
   }
 }
@@ -67,14 +71,12 @@ export async function POST(req: NextRequest) {
   if (!rl2.success) return rateLimitResponse(rl2.resetMs);
 
   try {
-    const { name, description, embedding_provider, embedding_model } = await req.json();
-
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    const body = await req.json();
+    const validation = validateBody(kbCreateSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
-    if (name.length > 100) {
-      return NextResponse.json({ error: "Name too long" }, { status: 400 });
-    }
+    const { name, description, embeddingProvider: embedding_provider, embeddingModel: embedding_model } = validation.data;
 
     let embProvider = embedding_provider || 'xenova';
     let embModel = embedding_model || 'Xenova/all-MiniLM-L6-v2';

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { generalLimiter, rateLimitResponse } from "@/lib/rate-limit";
+import { validateBody, messageCreateSchema } from "@/lib/validations";
 
 export async function POST(
   req: NextRequest,
@@ -17,14 +18,11 @@ export async function POST(
 
   const { id } = await params;
   const body = await req.json();
-  const { role, content } = body;
-
-  if (!role || !content) {
-    return NextResponse.json(
-      { error: "role and content are required" },
-      { status: 400 }
-    );
+  const validation = validateBody(messageCreateSchema, body);
+  if (!validation.success) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
   }
+  const { role, content } = validation.data;
 
   // Verify conversation ownership
   const { data: conversation } = await supabaseAdmin

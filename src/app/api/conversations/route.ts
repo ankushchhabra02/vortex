@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { generalLimiter, rateLimitResponse } from "@/lib/rate-limit";
+import { verifyKBOwnership } from "@/lib/supabase/verify-ownership";
+import { validateBody, conversationCreateSchema } from "@/lib/validations";
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
@@ -20,12 +22,14 @@ export async function GET(req: NextRequest) {
   let countQuery = supabaseAdmin
     .from("conversations")
     .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .is("deleted_at", null);
 
   let query = supabaseAdmin
     .from("conversations")
     .select("*")
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .order("updated_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -53,13 +57,15 @@ export async function POST(req: NextRequest) {
   if (!rl.success) return rateLimitResponse(rl.resetMs);
 
   const body = await req.json();
-  const { knowledgeBaseId, title } = body;
+  const validation = validateBody(conversationCreateSchema, body);
+  if (!validation.success) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+  const { knowledgeBaseId, title } = validation.data;
 
-  if (!knowledgeBaseId) {
-    return NextResponse.json(
-      { error: "knowledgeBaseId is required" },
-      { status: 400 }
-    );
+  const isOwner = await verifyKBOwnership(user.id, knowledgeBaseId);
+  if (!isOwner) {
+    return NextResponse.json({ error: "Knowledge base not found" }, { status: 403 });
   }
 
   const { data, error } = await supabaseAdmin

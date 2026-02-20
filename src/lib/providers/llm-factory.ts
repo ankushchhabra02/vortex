@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { ProviderConfig } from './types';
 
-export function createChatModel(config: ProviderConfig) {
+export async function createChatModel(config: ProviderConfig) {
   const { provider, apiKey, model, temperature = 0.7 } = config;
 
   switch (provider) {
@@ -14,9 +14,7 @@ export function createChatModel(config: ProviderConfig) {
       });
 
     case 'anthropic': {
-      // Dynamic import to avoid requiring the package when not in use
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { ChatAnthropic } = require('@langchain/anthropic');
+      const { ChatAnthropic } = await import('@langchain/anthropic');
       return new ChatAnthropic({
         apiKey,
         modelName: model,

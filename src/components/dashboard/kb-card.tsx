@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Database, FileText, MessageSquare, Trash2, Cpu } from "lucide-react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface KBCardProps {
   id: string;
@@ -26,6 +28,7 @@ export function KBCard({
   created_at,
   onDelete,
 }: KBCardProps) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const embeddingLabel = embedding_provider === 'xenova' ? 'Local' : 'OpenAI';
 
   return (
@@ -38,7 +41,7 @@ export function KBCard({
         <button
           onClick={(e) => {
             e.preventDefault();
-            onDelete(id);
+            setShowDeleteConfirm(true);
           }}
           className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all p-1 rounded-lg hover:bg-zinc-800"
         >
@@ -76,6 +79,16 @@ export function KBCard({
           Chat →
         </Link>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete Knowledge Base"
+        message="This will permanently delete this knowledge base, all its documents, and conversation history. This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => { setShowDeleteConfirm(false); onDelete(id); }}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }

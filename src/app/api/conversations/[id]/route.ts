@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { generalLimiter, rateLimitResponse } from "@/lib/rate-limit";
+import { validateBody, conversationUpdateSchema } from "@/lib/validations";
 
 export async function GET(
   req: NextRequest,
@@ -22,6 +23,7 @@ export async function GET(
     .select("*")
     .eq("id", id)
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .single();
 
   if (convError || !conversation) {
@@ -85,7 +87,11 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { title } = body;
+  const validation = validateBody(conversationUpdateSchema, body);
+  if (!validation.success) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+  const { title } = validation.data;
 
   const { error } = await supabaseAdmin
     .from("conversations")
@@ -129,13 +135,10 @@ export async function DELETE(
     );
   }
 
-  // Delete messages first (FK constraint)
-  await supabaseAdmin.from("messages").delete().eq("conversation_id", id);
-
-  // Delete conversation
+  // Soft delete conversation
   const { error } = await supabaseAdmin
     .from("conversations")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", id);
 
   if (error) {

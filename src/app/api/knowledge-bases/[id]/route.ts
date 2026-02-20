@@ -28,16 +28,28 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // CASCADE delete will remove documents and chunks
+  const now = new Date().toISOString();
+
+  // Soft delete the KB and related records
   const { error } = await supabaseAdmin
     .from('knowledge_bases')
-    .delete()
+    .update({ deleted_at: now })
     .eq('id', id);
 
   if (error) {
     console.error("Error deleting knowledge base:", error);
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
   }
+
+  // Soft delete related documents and conversations
+  await supabaseAdmin
+    .from('documents')
+    .update({ deleted_at: now })
+    .eq('knowledge_base_id', id);
+  await supabaseAdmin
+    .from('conversations')
+    .update({ deleted_at: now })
+    .eq('knowledge_base_id', id);
 
   return NextResponse.json({ success: true });
 }
