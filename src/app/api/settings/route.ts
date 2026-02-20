@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/supabase/auth';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { generalLimiter, rateLimitResponse } from '@/lib/rate-limit';
+import { validateBody, settingsUpdateSchema } from '@/lib/validations';
 
 export async function GET() {
   const user = await getAuthUser();
@@ -46,18 +47,11 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const allowed = ['llm_provider', 'llm_model', 'embedding_provider', 'embedding_model', 'temperature'];
-    const updates: Record<string, unknown> = {};
-
-    for (const key of allowed) {
-      if (body[key] !== undefined) {
-        updates[key] = body[key];
-      }
+    const validation = validateBody(settingsUpdateSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
-    }
+    const updates = validation.data;
 
     // Ensure settings row exists
     const { data: existing } = await supabaseAdmin

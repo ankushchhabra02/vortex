@@ -41,7 +41,7 @@ describe('createChatModel', () => {
     anthropicCalls = [];
   });
 
-  it('creates OpenAI model correctly', () => {
+  it('creates OpenAI model correctly', async () => {
     const config: ProviderConfig = {
       provider: 'openai',
       apiKey: 'sk-test-key',
@@ -55,7 +55,7 @@ describe('createChatModel', () => {
       temperature: number;
       streaming: boolean;
     }
-    const model = createChatModel(config) as unknown as MockModel;
+    const model = (await createChatModel(config)) as unknown as MockModel;
     expect(model._type).toBe('ChatOpenAI');
     expect(model.apiKey).toBe('sk-test-key');
     expect(model.modelName).toBe('gpt-4');
@@ -63,7 +63,7 @@ describe('createChatModel', () => {
     expect(model.streaming).toBe(true);
   });
 
-  it('creates Anthropic model correctly', () => {
+  it('creates Anthropic model correctly', async () => {
     const config: ProviderConfig = {
       provider: 'anthropic',
       apiKey: 'sk-ant-test',
@@ -76,57 +76,57 @@ describe('createChatModel', () => {
       temperature: number;
       streaming: boolean;
     }
-    const model = createChatModel(config) as unknown as MockModel;
-    // The dynamic require() in llm-factory may not use vitest mock,
-    // so verify by checking the returned model has the right config
+    const model = (await createChatModel(config)) as unknown as MockModel;
     expect(model.apiKey).toBe('sk-ant-test');
     expect(model.modelName).toBe('claude-3-opus');
     expect(model.streaming).toBe(true);
     expect(model.temperature).toBe(0.3);
   });
 
-  it('creates OpenRouter model with correct baseURL', () => {
+  it('creates OpenRouter model with correct baseURL', async () => {
     const config: ProviderConfig = {
       provider: 'openrouter',
       apiKey: 'or-key',
       model: 'meta-llama/llama-3.2-3b-instruct:free',
     };
-    createChatModel(config);
+    await createChatModel(config);
     expect(openAICalls).toHaveLength(1);
     expect(openAICalls[0].configuration).toEqual({
       baseURL: 'https://openrouter.ai/api/v1',
     });
   });
 
-  it('creates xAI model with correct baseURL', () => {
+  it('creates xAI model with correct baseURL', async () => {
     const config: ProviderConfig = {
       provider: 'xai',
       apiKey: 'xai-key',
       model: 'grok-1',
     };
-    createChatModel(config);
+    await createChatModel(config);
     expect(openAICalls).toHaveLength(1);
     expect(openAICalls[0].configuration).toEqual({
       baseURL: 'https://api.x.ai/v1',
     });
   });
 
-  it('throws for unsupported provider', () => {
+  it('throws for unsupported provider', async () => {
     const config = {
       provider: 'unknown-provider' as unknown as 'openai',
       apiKey: 'key',
       model: 'model',
     };
-    expect(() => createChatModel(config)).toThrow('Unsupported LLM provider: unknown-provider');
+    await expect(createChatModel(config)).rejects.toThrow(
+      'Unsupported LLM provider: unknown-provider'
+    );
   });
 
-  it('defaults temperature to 0.7', () => {
+  it('defaults temperature to 0.7', async () => {
     const config: ProviderConfig = {
       provider: 'openai',
       apiKey: 'key',
       model: 'gpt-4',
     };
-    const model = createChatModel(config) as unknown as { temperature: number };
+    const model = (await createChatModel(config)) as unknown as { temperature: number };
     expect(model.temperature).toBe(0.7);
   });
 });

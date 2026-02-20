@@ -21,21 +21,42 @@
 
 ---
 
-Vortex is a self-hosted RAG (Retrieval-Augmented Generation) application that lets you chat with your documents using any LLM provider. Upload PDFs, ingest URLs, and get accurate answers grounded in your own knowledge bases — all with a clean, modern interface.
+Vortex is a self-hosted RAG (Retrieval-Augmented Generation) application that lets you chat with your documents using any LLM provider. Upload PDFs, ingest URLs, and get accurate answers grounded in your own knowledge bases — with hybrid search, re-ranking, and source citations.
 
 **Works out of the box with free models. No API key required to get started.**
 
 ## Features
 
-- **Multi-Provider LLM Support** — OpenAI, Anthropic, xAI (Grok), and OpenRouter. Switch providers and models from the settings page. Free models available via OpenRouter with zero configuration.
-- **Switchable Embedding Models** — Local embeddings via Xenova/Transformers.js (free, no API key) or OpenAI embeddings (text-embedding-3-small/large). Embedding model is locked per knowledge base to prevent dimension mismatches.
+### RAG Pipeline
+- **Hybrid Search** — Combines vector similarity (pgvector cosine distance) with BM25 keyword matching using Reciprocal Rank Fusion (RRF) for better retrieval than vector-only search.
+- **Re-ranking** — After retrieving candidates, results are re-ranked using exact phrase matching, keyword density, and position scoring to surface the most relevant chunks.
+- **Source Citations** — Responses include `[n]` citation notation linking back to specific document sources, displayed as interactive badges in the chat UI.
+- **Semantic Chunking** — Documents are split into 1500-character chunks with 300-character overlap using sentence-aware separators for better context preservation.
+
+### Multi-Provider Support
+- **5 LLM Providers** — OpenAI, Anthropic, Google, xAI (Grok), and OpenRouter. Switch providers and models from the settings page. Free models available via OpenRouter with zero configuration.
+- **4 Embedding Providers** — Local embeddings via Xenova/Transformers.js (free, no API key), OpenAI (text-embedding-3-small/large), Google (text-embedding-004), or OpenRouter. Embedding model is locked per knowledge base to prevent dimension mismatches.
+
+### Core Features
 - **Knowledge Base Management** — Create multiple knowledge bases, each with its own embedding model. Dashboard shows document counts, conversation counts, and model badges.
-- **Document Ingestion** — Upload PDFs and text files, or ingest content from any URL. Documents are chunked and embedded automatically.
-- **Streaming Chat** — Real-time streaming responses with conversation persistence. Full chat history per knowledge base.
+- **Document Ingestion** — Upload PDFs and text files, or ingest content from any URL. Documents are chunked and embedded automatically with rollback on partial failure.
+- **Streaming Chat** — Real-time streaming responses with conversation persistence and full chat history per knowledge base.
 - **Settings Page** — Configure LLM provider, model, temperature, API keys, and default embedding model. API keys are encrypted at rest with AES-256-GCM.
-- **Authentication** — Email/password auth via Supabase with server-side session checks. All data is isolated per user with Row Level Security.
+
+### Security
+- **Auth Middleware** — Supabase SSR cookie-based auth with session refresh on every request. Security headers (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy).
+- **Rate Limiting** — Tiered per-endpoint limits (chat: 20/min, ingest: 30/min, general: 60/min) with 429 responses and Retry-After headers.
+- **Input Validation** — Zod schemas on all API route inputs with type-safe error messages.
+- **KB Ownership Verification** — Every knowledge base operation verifies the requesting user owns the resource.
+- **Soft Deletes** — Documents, knowledge bases, and conversations are soft-deleted with `deleted_at` timestamps, preserving data integrity.
+- **SSRF Protection** — URL ingestion validates against internal/private IP ranges.
+
+### UX
+- **Error Boundary** — React error boundary with fallback UI and retry button wrapping all protected routes.
+- **Confirmation Dialogs** — All destructive actions (delete KB, document, conversation) require confirmation.
+- **Toast Notifications** — User-facing error feedback on all API failures.
+- **Loading Skeletons** — Pulsing skeleton placeholders instead of full-page spinners.
 - **Responsive Design** — Works on desktop and mobile with collapsible sidebar navigation.
-- **GitHub Integration** — Direct link to the source repository from the header.
 
 ## Preview
 
@@ -70,8 +91,11 @@ cp .env.example .env.local
 
 1. Create a new Supabase project
 2. In the SQL Editor, run these migrations in order:
-   - `supabase/migrations/001_initial_schema.sql`
-   - `supabase/migrations/002_multi_provider.sql`
+   - `supabase/migrations/001_initial_schema.sql` — Core tables, RLS policies, vector search
+   - `supabase/migrations/002_multi_provider.sql` — Multi-provider support, flexible embeddings
+   - `supabase/migrations/003_soft_deletes.sql` — Soft delete columns and indexes
+   - `supabase/migrations/004_hybrid_search.sql` — Full-text search index and hybrid search function
+   - `supabase/migrations/005_fix_search_functions.sql` — Optimized search thresholds and scoring
 3. Copy your project URL, anon key, and service role key into `.env.local`
 
 ### Generate Encryption Key
@@ -109,35 +133,45 @@ Open [http://localhost:3000](http://localhost:3000), create an account, and star
 Browser
   │
   ├── Dashboard (/)           ← KB cards, recent conversations
-  ├── Chat (/chat/[kbId])     ← Streaming chat + document sidebar
+  ├── Chat (/chat/[kbId])     ← Streaming chat + citations + document sidebar
   └── Settings (/settings)    ← Provider config, API keys, embedding model
         │
         ▼
-  Next.js API Routes
-  ├── /api/chat               ← LLM streaming via provider factory
-  ├── /api/ingest             ← Document chunking + embedding
+  Middleware                   ← Auth session refresh, security headers, route protection
+        │
+        ▼
+  Next.js API Routes           ← Auth + rate limiting + Zod validation on every route
+  ├── /api/chat               ← RAG context retrieval → LLM streaming with citations
+  ├── /api/ingest             ← Document chunking + embedding (with rollback)
   ├── /api/settings           ← User preferences + encrypted API keys
-  ├── /api/knowledge-bases    ← KB CRUD with doc/conversation counts
-  └── /api/conversations      ← Chat history CRUD
+  ├── /api/knowledge-bases    ← KB CRUD with ownership verification
+  └── /api/conversations      ← Chat history CRUD (soft deletes)
+        │
+        ▼
+  RAG Pipeline
+  ├── Hybrid Search            ← Vector (pgvector) + Keyword (tsvector) via RRF
+  ├── Re-ranker                ← Phrase match + keyword density + position scoring
+  └── Context Builder          ← Top chunks with document titles → cited system prompt
         │
         ▼
   Provider Abstraction Layer
-  ├── LLM Factory             ← OpenAI, Anthropic, OpenRouter, xAI
-  ├── Embedding Factory       ← Xenova (local) or OpenAI API
+  ├── LLM Factory             ← OpenAI, Anthropic, Google, OpenRouter, xAI
+  ├── Embedding Factory       ← Xenova (local), OpenAI, Google, OpenRouter
   └── Crypto                  ← AES-256-GCM key encryption
         │
         ▼
   Supabase
-  ├── PostgreSQL + pgvector   ← Documents, chunks, embeddings
-  ├── Auth                    ← Email/password authentication
+  ├── PostgreSQL + pgvector   ← Documents, chunks, embeddings, tsvector index
+  ├── Auth (SSR)              ← Cookie-based authentication
   └── Row Level Security      ← Per-user data isolation
 ```
 
 ### How RAG Works in Vortex
 
-1. **Ingest** — Documents are split into chunks (~1000 chars) and each chunk is embedded using the KB's configured embedding model. Chunks and vectors are stored in pgvector.
-2. **Query** — When you ask a question, the query is embedded with the same model, then pgvector finds the most similar chunks via cosine distance.
-3. **Generate** — The top matching chunks are injected into the system prompt, and the selected LLM generates a grounded response.
+1. **Ingest** — Documents are split into 1500-char chunks with 300-char overlap using sentence-aware separators. Each chunk is embedded using the KB's configured embedding model and stored in pgvector.
+2. **Hybrid Search** — The user query is embedded and searched via both vector similarity (cosine distance) and BM25 keyword matching (PostgreSQL tsvector). Results are fused using Reciprocal Rank Fusion (RRF) with 70% vector / 30% keyword weighting.
+3. **Re-rank** — Top candidates are re-scored using exact phrase matching, keyword density, and match position to surface the most relevant chunks.
+4. **Generate** — The re-ranked chunks (with document titles) are injected into the system prompt with citation instructions. The LLM generates a grounded response with `[n]` source references.
 
 ## Database Schema
 
@@ -159,11 +193,13 @@ All tables have Row Level Security policies. Users can only access their own dat
 |-------|-----------|
 | Framework | Next.js 16 (App Router, Turbopack) |
 | UI | React 19, Tailwind CSS v4 |
-| Database | Supabase (PostgreSQL + pgvector) |
+| Database | Supabase (PostgreSQL + pgvector + tsvector) |
 | Auth | Supabase Auth via @supabase/ssr |
-| LLM | LangChain (ChatOpenAI, ChatAnthropic) |
-| Embeddings | Transformers.js (local) or OpenAI API |
+| LLM | LangChain (ChatOpenAI, ChatAnthropic, ChatGoogleGenerativeAI) |
+| Embeddings | Transformers.js (local), OpenAI, Google, OpenRouter |
 | Document Loading | LangChain (PDF, Cheerio) |
+| Validation | Zod |
+| Testing | Vitest (80 tests) |
 
 ## Project Structure
 
@@ -192,15 +228,18 @@ src/
 │   ├── chat-interface.tsx        # Chat UI with streaming
 │   ├── ingest-panel.tsx          # Tabbed sidebar (Chats/Documents)
 │   └── toast.tsx                 # Toast notifications
-└── lib/
-    ├── providers/                # Multi-provider abstraction
-    │   ├── types.ts              # Provider types + model catalogs
-    │   ├── llm-factory.ts        # LLM provider factory
-    │   ├── embedding-factory.ts  # Embedding provider factory
-    │   └── crypto.ts             # AES-256-GCM encryption
-    ├── supabase/                 # Supabase clients + auth helpers
-    ├── embeddings.ts             # Xenova/Transformers.js embeddings
-    └── rag-service-supabase.ts   # RAG pipeline (chunk, embed, search)
+├── lib/
+│   ├── providers/                # Multi-provider abstraction
+│   │   ├── types.ts              # Provider types + model catalogs
+│   │   ├── llm-factory.ts        # LLM provider factory
+│   │   ├── embedding-factory.ts  # Embedding provider factory
+│   │   └── crypto.ts             # AES-256-GCM encryption
+│   ├── supabase/                 # Supabase clients + auth helpers + ownership verification
+│   ├── validations.ts            # Zod schemas for all API inputs
+│   ├── rate-limit.ts             # Tiered rate limiting
+│   ├── embeddings.ts             # Xenova/Transformers.js embeddings
+│   └── rag-service-supabase.ts   # RAG pipeline (chunk, embed, hybrid search, re-rank)
+└── middleware.ts                  # Auth session refresh + security headers
 ```
 
 ## Deployment
@@ -212,7 +251,7 @@ src/
 3. Add all environment variables from the table above
 4. Deploy
 
-The app uses server-side auth checks (no Edge middleware), so it works on all Vercel runtimes without issues.
+The app uses Supabase SSR middleware for auth. All environment variables must be set in Vercel's dashboard.
 
 ### Self-Hosted
 
@@ -220,12 +259,16 @@ Any platform that runs Node.js 18+ works. Build with `npm run build` and start w
 
 ## Security
 
-- API keys encrypted at rest (AES-256-GCM)
-- Server-side authentication on all protected routes
+- API keys encrypted at rest (AES-256-GCM with random IV per encryption)
+- Auth middleware on every request (Supabase SSR session refresh + route protection)
+- Security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+- Rate limiting on all endpoints (tiered: chat 20/min, ingest 30/min, general 60/min)
+- Zod input validation on all API route inputs
+- KB ownership verification before any data access
 - Row Level Security on all database tables
-- URL validation with SSRF protection
-- File type and size validation
-- Input sanitization and length limits
+- URL validation with SSRF protection (blocks internal/private IPs)
+- File type and size validation (10MB limit, PDF/TXT/MD/HTML only)
+- Soft deletes filtered from all queries (no data leakage from deleted records)
 
 ## Troubleshooting
 
@@ -235,7 +278,9 @@ Any platform that runs Node.js 18+ works. Build with `npm run build` and start w
 
 **Chat not responding** — Check your LLM provider settings. If using a paid model, verify the API key is set and valid in Settings.
 
-**Database errors after update** — Make sure you've run both SQL migrations in order. The second migration (`002_multi_provider.sql`) drops and recreates the embedding column — existing embeddings will need to be re-ingested.
+**Database errors after update** — Make sure you've run all 5 SQL migrations in order (001 through 005). Migration 002 drops and recreates the embedding column — existing embeddings will need to be re-ingested.
+
+**Generic/irrelevant chat responses** — Ensure migration 005 has been applied. It fixes search thresholds and hybrid scoring. Also verify the KB has documents ingested (check the sidebar document list).
 
 ## Contributing
 

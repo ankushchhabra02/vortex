@@ -7,6 +7,19 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 
+interface Source {
+    index: number;
+    title: string;
+    similarity: number;
+}
+
+interface ChatMessage {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    sources?: Source[];
+}
+
 interface ChatInterfaceProps {
     knowledgeBaseId: string | null;
     conversationId: string | null;
@@ -18,9 +31,7 @@ export function ChatInterface({
     conversationId,
     onConversationCreated,
 }: ChatInterfaceProps) {
-    const [messages, setMessages] = useState<
-        { role: "user" | "assistant"; content: string }[]
-    >([]);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -28,6 +39,9 @@ export function ChatInterface({
     const [loadingOlder, setLoadingOlder] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const activeConversationRef = useRef<string | null>(null);
+    const msgIdRef = useRef(0);
+    const nextMsgId = () => `msg-${++msgIdRef.current}`;
+    const justCreatedConvRef = useRef(false);
 
     // Track the current conversation to avoid stale closures
     activeConversationRef.current = conversationId;
@@ -37,6 +51,12 @@ export function ChatInterface({
         if (!conversationId) {
             setMessages([]);
             setTotalMessages(0);
+            return;
+        }
+
+        // Skip fetching if we just created this conversation (messages are already in state from streaming)
+        if (justCreatedConvRef.current) {
+            justCreatedConvRef.current = false;
             return;
         }
 
@@ -51,6 +71,7 @@ export function ChatInterface({
             .then((data) => {
                 if (cancelled) return;
                 const msgs = (data.messages || []).map((m: { role: string; content: string }) => ({
+                    id: nextMsgId(),
                     role: m.role as "user" | "assistant",
                     content: m.content,
                 }));
@@ -90,6 +111,7 @@ export function ChatInterface({
             const olderMsgs = (data.messages || [])
                 .slice(0, remaining > olderLimit ? olderLimit : remaining)
                 .map((m: { role: string; content: string }) => ({
+                    id: nextMsgId(),
                     role: m.role as "user" | "assistant",
                     content: m.content,
                 }));
@@ -120,12 +142,11 @@ export function ChatInterface({
         const userMsg = input;
         setInput("");
 
-        const newMessages = [
-            ...messages,
-            { role: "user" as const, content: userMsg },
-        ];
+        const userMsgObj: ChatMessage = { id: nextMsgId(), role: "user", content: userMsg };
+        const assistantPlaceholder: ChatMessage = { id: nextMsgId(), role: "assistant", content: "" };
+        const newMessages = [...messages, userMsgObj];
         // Add assistant placeholder immediately to show "Thinking..."
-        setMessages([...newMessages, { role: "assistant" as const, content: "" }]);
+        setMessages([...newMessages, assistantPlaceholder]);
         setIsLoading(true);
 
         try {
@@ -133,7 +154,7 @@ export function ChatInterface({
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    messages: newMessages,
+                    messages: newMessages.map(m => ({ role: m.role, content: m.content })),
                     knowledgeBaseId,
                     conversationId: activeConversationRef.current,
                 }),
@@ -152,7 +173,15 @@ export function ChatInterface({
             // Check if a new conversation was created
             const newConvId = res.headers.get("X-Conversation-Id");
             if (newConvId && !activeConversationRef.current) {
+                justCreatedConvRef.current = true;
                 onConversationCreated(newConvId);
+            }
+
+            // Parse sources from response headers
+            const sourcesHeader = res.headers.get("X-Sources");
+            let parsedSources: Source[] = [];
+            if (sourcesHeader) {
+                try { parsedSources = JSON.parse(sourcesHeader); } catch { /* ignore parse error */ }
             }
 
             const reader = res.body?.getReader();
@@ -177,6 +206,14 @@ export function ChatInterface({
                     return [...prev.slice(0, -1), updated];
                 });
             }
+
+            // After streaming is done, attach sources to the assistant message
+            if (parsedSources.length > 0) {
+                setMessages((prev) => {
+                    const last = prev[prev.length - 1];
+                    return [...prev.slice(0, -1), { ...last, sources: parsedSources }];
+                });
+            }
         } catch (error) {
             const errMsg =
                 error instanceof Error && error.message
@@ -185,6 +222,7 @@ export function ChatInterface({
             setMessages((prev) => [
                 ...prev,
                 {
+                    id: nextMsgId(),
                     role: "assistant",
                     content: `Something went wrong: ${errMsg}. Please try again.`,
                 },
@@ -245,9 +283,9 @@ export function ChatInterface({
                                         </button>
                                     </div>
                                 )}
-                                {messages.map((m, i) => (
+                                {messages.map((m) => (
                                     <div
-                                        key={i}
+                                        key={m.id}
                                         className={cn(
                                             "flex w-full animate-fade-in",
                                             m.role === "user" ? "justify-end" : "justify-start"
@@ -286,6 +324,22 @@ export function ChatInterface({
                                                     </ReactMarkdown>
                                                 )}
                                             </div>
+                                            {m.sources && m.sources.length > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-zinc-700/50">
+                                                    <p className="text-[10px] text-zinc-500 mb-1">Sources:</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {m.sources.map((s) => (
+                                                            <span
+                                                                key={s.index}
+                                                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-blue-600/20 text-blue-300 border border-blue-500/30"
+                                                                title={`${s.title} (${(s.similarity * 100).toFixed(0)}% match)`}
+                                                            >
+                                                                [{s.index}] {s.title}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}

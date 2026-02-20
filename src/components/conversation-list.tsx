@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Plus, X, MessageSquare, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { useToast } from "@/components/toast";
 
 interface Conversation {
   id: string;
@@ -17,21 +19,6 @@ interface ConversationListProps {
   refreshKey?: number;
 }
 
-function timeAgo(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const seconds = Math.floor((now - then) / 1000);
-
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString();
-}
-
 export function ConversationList({
   knowledgeBaseId,
   activeConversationId,
@@ -43,6 +30,8 @@ export function ConversationList({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const fetchConversations = useCallback(async (pageNum = 1, append = false) => {
     if (!knowledgeBaseId) {
@@ -70,12 +59,12 @@ export function ConversationList({
       setPage(pageNum);
       setHasMore(pageNum * 20 < (data.total ?? 0));
     } catch {
-      // Error handled by loading state
+      toast("Failed to load conversations", "error");
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [knowledgeBaseId]);
+  }, [knowledgeBaseId, toast]);
 
   useEffect(() => {
     fetchConversations();
@@ -85,8 +74,7 @@ export function ConversationList({
     onSelect(null);
   };
 
-  const handleDelete = async (e: React.MouseEvent, conversationId: string) => {
-    e.stopPropagation();
+  const handleDelete = async (conversationId: string) => {
     try {
       const res = await fetch(`/api/conversations/${conversationId}`, {
         method: "DELETE",
@@ -97,7 +85,7 @@ export function ConversationList({
         onSelect(null);
       }
     } catch {
-      // Silent fail — UI already reflects optimistic state
+      toast("Failed to delete conversation", "error");
     }
   };
 
@@ -157,7 +145,7 @@ export function ConversationList({
                   </div>
                 </div>
                 <button
-                  onClick={(e) => handleDelete(e, conv.id)}
+                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(conv.id); }}
                   className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 shrink-0"
                 >
                   <X size={14} />
@@ -180,6 +168,16 @@ export function ConversationList({
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete Conversation"
+        message="This will permanently delete this conversation and all its messages. This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => { if (deleteTarget) handleDelete(deleteTarget); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

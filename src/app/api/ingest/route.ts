@@ -9,6 +9,7 @@ import { decrypt } from "@/lib/providers/crypto";
 import type { EmbeddingConfig } from "@/lib/providers/types";
 import { getEmbeddingDimensions } from "@/lib/providers/types";
 import { ingestLimiter, rateLimitResponse } from "@/lib/rate-limit";
+import { verifyKBOwnership } from "@/lib/supabase/verify-ownership";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -63,7 +64,7 @@ async function getKBEmbeddingConfig(kbId: string, userId: string): Promise<Embed
       .single();
 
     if (providerData) {
-      try { apiKey = decrypt(providerData.api_key_encrypted); } catch { }
+      try { apiKey = decrypt(providerData.api_key_encrypted); } catch (e) { console.error('[ingest] Decrypt error:', e); }
     }
   }
 
@@ -94,6 +95,11 @@ export async function POST(req: NextRequest) {
 
     if (!knowledgeBaseId) {
       return NextResponse.json({ error: "Knowledge base ID is required" }, { status: 400 });
+    }
+
+    const isOwner = await verifyKBOwnership(user.id, knowledgeBaseId);
+    if (!isOwner) {
+      return NextResponse.json({ error: "Knowledge base not found" }, { status: 403 });
     }
 
     let docs: Document[] = [];

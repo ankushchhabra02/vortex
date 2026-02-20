@@ -6,6 +6,10 @@ import { Database } from './database.types';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.warn('[Supabase] Missing env vars - using placeholders (build-time only)');
+}
+
 // Admin client (bypasses RLS) - for server-side operations like RAG
 // Uses empty strings during build time; will error at runtime if env vars are missing
 export const supabaseAdmin = createClient<Database>(

@@ -74,9 +74,9 @@ export const LLM_PROVIDERS: Record<LLMProvider, LLMProviderInfo> = {
     name: 'Anthropic',
     requiresKey: true,
     models: [
+      { id: 'claude-opus-4-20250514', name: 'Claude Opus 4', contextWindow: 200000 },
       { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', contextWindow: 200000 },
       { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', contextWindow: 200000 },
-      { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', contextWindow: 200000 },
     ],
   },
   xai: {

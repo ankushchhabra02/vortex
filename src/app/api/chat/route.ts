@@ -8,8 +8,9 @@ import { decrypt } from "@/lib/providers/crypto";
 import type { EmbeddingConfig, LLMProvider } from "@/lib/providers/types";
 import { getEmbeddingDimensions } from "@/lib/providers/types";
 import { chatLimiter, rateLimitResponse } from "@/lib/rate-limit";
+import { verifyKBOwnership } from "@/lib/supabase/verify-ownership";
+import { validateBody, chatSchema } from "@/lib/validations";
 
-const MAX_MESSAGE_LENGTH = 10000;
 const MAX_MESSAGES_HISTORY = 20;
 
 async function getUserLLMConfig(userId: string) {
@@ -38,8 +39,8 @@ async function getUserLLMConfig(userId: string) {
     if (providerData) {
       try {
         apiKey = decrypt(providerData.api_key_encrypted);
-      } catch {
-        // Fall back to env
+      } catch (e) {
+        console.error('[chat] Decrypt error:', e);
       }
     }
 
@@ -73,7 +74,7 @@ async function getKBEmbeddingConfig(kbId: string, userId: string): Promise<Embed
       .single();
 
     if (providerData) {
-      try { apiKey = decrypt(providerData.api_key_encrypted); } catch { }
+      try { apiKey = decrypt(providerData.api_key_encrypted); } catch (e) { console.error('[chat] Decrypt error:', e); }
     }
   }
 
@@ -96,20 +97,22 @@ export async function POST(req: NextRequest) {
     if (!rl.success) return rateLimitResponse(rl.resetMs);
 
     const body = await req.json();
-    const { messages, knowledgeBaseId, conversationId } = body;
+    const validation = validateBody(chatSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+    const { messages, knowledgeBaseId, conversationId } = validation.data;
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
+    if (knowledgeBaseId) {
+      const isOwner = await verifyKBOwnership(user.id, knowledgeBaseId);
+      if (!isOwner) {
+        return NextResponse.json({ error: "Knowledge base not found" }, { status: 403 });
+      }
     }
 
     const limitedMessages = messages.slice(-MAX_MESSAGES_HISTORY);
     const lastMessage = limitedMessages[limitedMessages.length - 1];
     const userQuery = lastMessage.content;
-
-    if (typeof userQuery !== 'string' || userQuery.length > MAX_MESSAGE_LENGTH) {
-      return NextResponse.json({ error: "Message too long" }, { status: 400 });
-    }
-
     const sanitizedQuery = userQuery.trim();
     if (!sanitizedQuery) {
       return NextResponse.json({ error: "Empty message" }, { status: 400 });
@@ -138,13 +141,16 @@ export async function POST(req: NextRequest) {
     }
 
     let context = "";
+    let sources: Array<{ index: number; title: string; similarity: number }> = [];
     if (knowledgeBaseId) {
       console.log(`[RAG] Retrieving context for KB: ${knowledgeBaseId}, Query: "${sanitizedQuery}"`);
       try {
         const embeddingConfig = await getKBEmbeddingConfig(knowledgeBaseId, user.id);
         console.log(`[RAG] Embedding Config:`, embeddingConfig);
-        context = await ragService.getContext(sanitizedQuery, knowledgeBaseId, 5, embeddingConfig);
-        console.log(`[RAG] Retrieved context length: ${context.length}`);
+        const result = await ragService.getContextWithSources(sanitizedQuery, knowledgeBaseId, 5, embeddingConfig);
+        context = result.context;
+        sources = result.sources;
+        console.log(`[RAG] Retrieved context length: ${context.length}, sources: ${sources.length}`);
       } catch (error) {
         console.error("[RAG] Error retrieving context:", error);
       }
@@ -155,24 +161,41 @@ export async function POST(req: NextRequest) {
       const { data: kbDocs } = await supabaseAdmin
         .from("documents")
         .select("title")
-        .eq("knowledge_base_id", knowledgeBaseId);
+        .eq("knowledge_base_id", knowledgeBaseId)
+        .is("deleted_at", null);
       if (kbDocs && kbDocs.length > 0) {
         docTitles = kbDocs.map(d => d.title).join(", ");
       }
     }
 
-    const systemPrompt = `You are Vortex, a helpful AI assistant.
-Current Knowledge Base Documents: ${docTitles}
+    const systemPrompt = knowledgeBaseId
+      ? `You are Vortex, a helpful AI assistant with access to a knowledge base.
 
-${context ? `Use the following context to answer accurately:
+Available documents: ${docTitles}
+
+${context
+        ? `The following context was retrieved from the knowledge base and is DIRECTLY RELEVANT to the user's question. You MUST use this context as your primary source of information. Base your answer on the context below. When using information from the context, cite the source using [n] notation matching the source numbers.
+
+Do NOT say "based on the context provided" or similar meta-references. Simply answer the question naturally using the information.
+
 CONTEXT:
 ${context}
-` : "You have access to a knowledge base, but no specific relevant content was found for this query. If the user asks about documents, confirm you have access to them but need a specific question to provide details."}
 
-IMPORTANT: Never say you cannot read or process files. You have direct access to the text content of the documents listed above through your knowledge base integration.`;
+If the context does not fully answer the question, use what is available and note what additional information might be needed.`
+        : `No matching content was found in the knowledge base for this specific query. You still have access to these documents: ${docTitles}. Try to help the user by:
+1. Suggesting they rephrase their question with different keywords
+2. Letting them know what topics the available documents cover (based on the titles)
+3. Answering from your general knowledge if appropriate, but clearly stating that the answer is not from their documents`
+      }
+
+IMPORTANT RULES:
+- Never say you cannot read or process files. You have direct access to the document text through the knowledge base.
+- If context is provided above, prioritize it over your general knowledge.
+- Be specific and detailed when context supports it.`
+      : `You are Vortex, a helpful AI assistant. Answer the user's question to the best of your ability.`;
 
     const llmConfig = await getUserLLMConfig(user.id);
-    const chat = createChatModel({
+    const chat = await createChatModel({
       provider: llmConfig.provider,
       apiKey: llmConfig.apiKey,
       model: llmConfig.model,
@@ -239,6 +262,10 @@ IMPORTANT: Never say you cannot read or process files. You have direct access to
 
     if (activeConversationId) {
       headers['X-Conversation-Id'] = activeConversationId;
+    }
+
+    if (sources.length > 0) {
+      headers['X-Sources'] = JSON.stringify(sources);
     }
 
     return new NextResponse(stream, { headers });

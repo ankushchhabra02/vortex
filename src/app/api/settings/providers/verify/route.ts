@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/supabase/auth';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { decrypt } from '@/lib/providers/crypto';
 import { verifyLimiter, rateLimitResponse } from '@/lib/rate-limit';
+import { validateBody, providerVerifySchema } from '@/lib/validations';
 
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
@@ -14,11 +15,12 @@ export async function POST(req: NextRequest) {
   if (!rl.success) return rateLimitResponse(rl.resetMs);
 
   try {
-    const { provider } = await req.json();
-
-    if (!provider) {
-      return NextResponse.json({ error: 'Provider is required' }, { status: 400 });
+    const body = await req.json();
+    const validation = validateBody(providerVerifySchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
+    const { provider } = validation.data;
 
     const { data } = await supabaseAdmin
       .from('user_providers')
@@ -34,7 +36,8 @@ export async function POST(req: NextRequest) {
     let apiKey: string;
     try {
       apiKey = decrypt(data.api_key_encrypted);
-    } catch {
+    } catch (e) {
+      console.error('[providers/verify] Decrypt error:', e);
       return NextResponse.json({ error: 'Failed to decrypt API key' }, { status: 500 });
     }
 
@@ -45,33 +48,28 @@ export async function POST(req: NextRequest) {
       case 'openai': {
         const res = await fetch('https://api.openai.com/v1/models', {
           headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(15000),
         });
         valid = res.ok;
         message = valid ? 'OpenAI key is valid' : 'Invalid OpenAI API key';
         break;
       }
       case 'anthropic': {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
+        const res = await fetch('https://api.anthropic.com/v1/models', {
           headers: {
             'x-api-key': apiKey,
             'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            model: 'claude-3-5-haiku-20241022',
-            max_tokens: 1,
-            messages: [{ role: 'user', content: 'hi' }],
-          }),
+          signal: AbortSignal.timeout(15000),
         });
-        // 200 or 400 (bad request but auth worked) means valid key
-        valid = res.status !== 401 && res.status !== 403;
+        valid = res.ok;
         message = valid ? 'Anthropic key is valid' : 'Invalid Anthropic API key';
         break;
       }
       case 'openrouter': {
         const res = await fetch('https://openrouter.ai/api/v1/models', {
           headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(15000),
         });
         valid = res.ok;
         message = valid ? 'OpenRouter key is valid' : 'Invalid OpenRouter API key';
@@ -80,6 +78,7 @@ export async function POST(req: NextRequest) {
       case 'xai': {
         const res = await fetch('https://api.x.ai/v1/models', {
           headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(15000),
         });
         valid = res.ok;
         message = valid ? 'xAI key is valid' : 'Invalid xAI API key';

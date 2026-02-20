@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!res.ok) {

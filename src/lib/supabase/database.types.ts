@@ -86,6 +86,7 @@ export interface Database {
           embedding_dimensions: number
           created_at: string
           updated_at: string
+          deleted_at: string | null
         }
         Insert: {
           id?: string
@@ -97,6 +98,7 @@ export interface Database {
           embedding_dimensions?: number
           created_at?: string
           updated_at?: string
+          deleted_at?: string | null
         }
         Update: {
           id?: string
@@ -108,6 +110,7 @@ export interface Database {
           embedding_dimensions?: number
           created_at?: string
           updated_at?: string
+          deleted_at?: string | null
         }
         Relationships: []
       }
@@ -122,6 +125,7 @@ export interface Database {
           file_type: string | null
           created_at: string
           updated_at: string
+          deleted_at: string | null
         }
         Insert: {
           id?: string
@@ -133,6 +137,7 @@ export interface Database {
           file_type?: string | null
           created_at?: string
           updated_at?: string
+          deleted_at?: string | null
         }
         Update: {
           id?: string
@@ -144,6 +149,7 @@ export interface Database {
           file_type?: string | null
           created_at?: string
           updated_at?: string
+          deleted_at?: string | null
         }
         Relationships: [
           {
@@ -201,6 +207,7 @@ export interface Database {
           title: string | null
           created_at: string
           updated_at: string
+          deleted_at: string | null
         }
         Insert: {
           id?: string
@@ -209,6 +216,7 @@ export interface Database {
           title?: string | null
           created_at?: string
           updated_at?: string
+          deleted_at?: string | null
         }
         Update: {
           id?: string
@@ -217,6 +225,7 @@ export interface Database {
           title?: string | null
           created_at?: string
           updated_at?: string
+          deleted_at?: string | null
         }
         Relationships: [
           {
@@ -280,6 +289,25 @@ export interface Database {
           document_id: string
           chunk_text: string
           similarity: number
+        }[]
+      }
+      hybrid_search_chunks: {
+        Args: {
+          query_text: string
+          query_embedding: number[]
+          kb_id?: string | null
+          match_count?: number
+          vector_weight?: number
+          keyword_weight?: number
+          rrf_k?: number
+        }
+        Returns: {
+          id: string
+          document_id: string
+          chunk_text: string
+          similarity: number
+          keyword_rank: number
+          combined_score: number
         }[]
       }
     }

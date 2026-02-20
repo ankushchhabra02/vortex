@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/supabase/auth";
-import { ragService } from "@/lib/rag-service-supabase";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { supabaseAdmin, createServerSupabaseClient } from "@/lib/supabase/server";
 import { generalLimiter, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function DELETE(
@@ -35,7 +34,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await ragService.deleteDocument(id);
+    await supabaseAdmin
+      .from('documents')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting document:", error);
