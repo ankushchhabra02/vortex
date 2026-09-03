@@ -14,8 +14,10 @@ export const chatSchema = z.object({
     )
     .min(1)
     .max(100),
-  knowledgeBaseId: uuidSchema.optional(),
-  conversationId: uuidSchema.optional(),
+  // nullish, not optional: the chat UI holds these in state that starts as
+  // null, so a brand new conversation posts null rather than omitting the key.
+  knowledgeBaseId: uuidSchema.nullish(),
+  conversationId: uuidSchema.nullish(),
 });
 
 // Conversations

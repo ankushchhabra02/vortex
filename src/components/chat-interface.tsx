@@ -156,7 +156,7 @@ export function ChatInterface({
                 body: JSON.stringify({
                     messages: newMessages.map(m => ({ role: m.role, content: m.content })),
                     knowledgeBaseId,
-                    conversationId: activeConversationRef.current,
+                    conversationId: activeConversationRef.current ?? undefined,
                 }),
             });
 

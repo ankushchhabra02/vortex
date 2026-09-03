@@ -33,6 +33,31 @@ describe('validateBody', () => {
 });
 
 describe('chatSchema', () => {
+  it('accepts a null conversationId from a brand new chat', () => {
+    const result = chatSchema.safeParse({
+      messages: [{ role: 'user', content: 'Hello' }],
+      knowledgeBaseId: '123e4567-e89b-12d3-a456-426614174000',
+      conversationId: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a null knowledgeBaseId', () => {
+    const result = chatSchema.safeParse({
+      messages: [{ role: 'user', content: 'Hello' }],
+      knowledgeBaseId: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('still rejects a non-uuid conversationId', () => {
+    const result = chatSchema.safeParse({
+      messages: [{ role: 'user', content: 'Hello' }],
+      conversationId: 'not-a-uuid',
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('validates correct chat input', () => {
     const result = chatSchema.safeParse({
       messages: [{ role: 'user', content: 'Hello' }],
