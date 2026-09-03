@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { consumeAuthError } from '@/lib/auth-errors';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -11,6 +12,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // A failed auth link (expired recovery mail, say) redirects here with the
+  // reason in the URL fragment, which the server never sees.
+  useEffect(() => {
+    const message = consumeAuthError(window.location, window.history);
+    if (message) setError(message);
+  }, []);
 
   // Redirect if already logged in
   useEffect(() => {

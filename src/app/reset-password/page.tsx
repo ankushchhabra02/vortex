@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { consumeAuthError } from '@/lib/auth-errors';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -18,6 +19,8 @@ export default function ResetPasswordPage() {
   const [hasSession, setHasSession] = useState<boolean | null>(null);
 
   useEffect(() => {
+    const message = consumeAuthError(window.location, window.history);
+    if (message) setError(message);
     supabase.auth.getUser().then(({ data: { user } }) => setHasSession(!!user));
   }, []);
 
@@ -65,7 +68,7 @@ export default function ResetPasswordPage() {
 
           {hasSession === false ? (
             <p className="text-sm text-zinc-400 leading-relaxed">
-              This reset link has expired or has already been used.{' '}
+              {error || 'This reset link has expired or has already been used.'}{' '}
               <Link href="/forgot-password" className="text-blue-400 hover:text-blue-300">
                 Request a new one
               </Link>
