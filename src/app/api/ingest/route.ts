@@ -10,6 +10,7 @@ import type { EmbeddingConfig } from "@/lib/providers/types";
 import { getEmbeddingDimensions } from "@/lib/providers/types";
 import { ingestLimiter, rateLimitResponse } from "@/lib/rate-limit";
 import { verifyKBOwnership } from "@/lib/supabase/verify-ownership";
+import { isStorableSourceUrl, resolveDocumentTitle } from "@/lib/ingest-source";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -92,6 +93,11 @@ export async function POST(req: NextRequest) {
     const url = formData.get("url") as string;
     const file = formData.get("file") as File;
     const knowledgeBaseId = formData.get("knowledgeBaseId") as string;
+    // Optional provenance for uploads. A client that already holds the page
+    // text (browser extension, scraper, sync job) can say where it came from,
+    // for pages this server could never fetch itself.
+    const providedTitle = formData.get("title");
+    const providedSourceUrl = formData.get("sourceUrl");
 
     if (!knowledgeBaseId) {
       return NextResponse.json({ error: "Knowledge base ID is required" }, { status: 400 });
@@ -118,7 +124,10 @@ export async function POST(req: NextRequest) {
       try {
         const loader = new CheerioWebBaseLoader(url);
         docs = await loader.load();
-        metadata.title = new URL(url).hostname;
+        metadata.title = resolveDocumentTitle(
+          docs[0]?.metadata?.title,
+          new URL(url).hostname
+        );
         metadata.sourceUrl = url;
         metadata.fileType = 'url';
       } catch (error) {
@@ -158,8 +167,11 @@ export async function POST(req: NextRequest) {
           })];
           metadata.fileType = file.type;
         }
-        metadata.title = file.name;
+        metadata.title = resolveDocumentTitle(providedTitle, file.name);
         metadata.filePath = file.name;
+        if (isStorableSourceUrl(providedSourceUrl)) {
+          metadata.sourceUrl = providedSourceUrl;
+        }
       } catch (error) {
         console.error("File processing error:", error);
         return NextResponse.json({ error: "Failed to process file" }, { status: 400 });
