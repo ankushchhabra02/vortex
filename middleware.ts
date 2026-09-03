@@ -41,6 +41,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/signup') ||
     pathname.startsWith('/auth') ||
+    pathname.startsWith('/forgot-password') ||
     pathname.startsWith('/api/models');
 
   // Redirect unauthenticated users to login
