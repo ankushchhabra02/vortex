@@ -36,7 +36,13 @@ export async function GET(request: Request) {
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
     }
+
+    return NextResponse.redirect(
+      `${origin}/login?error=access_denied&error_description=${encodeURIComponent(error.message)}`
+    );
   }
 
+  // Supabase reports link failures in the fragment, which survives this
+  // redirect and is read on the login page.
   return NextResponse.redirect(`${origin}/login`);
 }
